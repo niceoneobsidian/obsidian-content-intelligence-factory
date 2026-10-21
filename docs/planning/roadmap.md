@@ -12,7 +12,7 @@ Turn authorized social sources and other approved research inputs into evidence-
 - Inventory OCIF, USIE, OIS, OPI and NUEGS source trees, default branches, CI, tests and current interfaces.
 - Record exact revisions and test outcomes; do not treat remote README review as a local test.
 - Map applicable NUEGS controls and unresolved governance decisions.
-- Establish OPI-tracked epics/tasks, owners, dependencies and evidence fields.
+- Define the OCIF project and task linkage through OPI's current `ProjectTask` / `TaskRepository` boundary and documented correlation envelope, after verifying the runnable integration path.
 - **Exit:** reviewed baseline report and initial architecture decisions backlog.
 
 ### M1 — Architecture and interface agreement
@@ -55,7 +55,7 @@ Turn authorized social sources and other approved research inputs into evidence-
 - **Exit:** positive and negative authorization tests, idempotency/reconciliation and measurement fixtures pass.
 
 ### M7 — Dashboard and operations
-- Design UI/UX from stable API contracts and real user workflows.
+- Build the dashboard against stable, versioned API contracts, not provisional internal tables.
 - Show source provenance, capture status, evidence gaps, research claims, content review state and performance measures.
 - Add access controls, observability, retention/deletion, backup/restore, rollback and operational runbooks.
 - **Exit:** independent acceptance against G0–G6; release scope and limitations documented.
@@ -75,7 +75,9 @@ Dashboard visual exploration may happen earlier, but production UI implementatio
 
 ## Planning system
 
-Use OPI as the project/task authority once its current application interface and deployment path are verified. Until then, this repository's roadmap and GitHub issues are a transparent planning record, not proof of a live OPI integration. Each work item should include owner, dependencies, acceptance criteria, risk, evidence state, relevant commit/PR, and gate.
+OPI's documented integration contract assigns project/task identity, plan version, task lifecycle and project reporting to OPI; OIS owns authorization and governed execution, while Agent Weave handles delegated work and verification. Preserve the distinct correlation identifiers (`task_id`, `task_version`, `execution_run_id`, `ois_execution_id`, `approval_id`, `trace_id`, `evidence_id`) rather than using a single generic ID.
+
+The live OPI README and integration contract also record pilot gaps: production entry-point wiring, durable cross-system evidence indexing, deployment wiring, and end-to-end recovery still need verification. Therefore, this repository's roadmap is currently a planning record, not proof that OCIF has been registered as a live OPI project. Use OPI once the target instance/API and task creation path are verified; interim GitHub issues may track work but do not replace OPI state.
 
 ## Initial work item IDs
 
