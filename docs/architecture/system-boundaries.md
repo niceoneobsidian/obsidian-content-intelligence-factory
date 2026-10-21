@@ -24,10 +24,10 @@ This is a boundary proposal based on the current READMEs and selected architectu
 ## 3. Data and execution flow
 
 ```text
-OPI project / objective
+OPI ProjectTask / project objective
         |
         v
-OCIF research or content task
+OCIF research or content task (linked to OPI task identity/version)
         |
         v
 Authorized source URL manifest
@@ -65,7 +65,15 @@ OPI/OIS reporting, with links to evidence
 
 Publishing is a later milestone, not part of the first ingestion proof. Until OIS's actual runtime and approval path are verified end to end, OCIF must not claim it can safely publish unattended.
 
-## 4. Canonical ownership and persistence
+## 4. OPI/OIS task and execution correlation
+
+The current OPI integration contract names `ProjectTask` and `TaskRepository` as the project/task boundary. Its correlation envelope includes `project_id`, `task_id`, `task_version`, `execution_run_id`, `ois_execution_id`, `plan_version`, `approval_id`, `trace_id`, `evidence_id` and status. These identifiers have different meanings and must not be collapsed into one generic run ID.
+
+OCIF should retain OPI task identity and version in its project/task linkage, and preserve relevant execution/evidence references in metadata until OPI's model is deliberately extended. It must not mark an OPI task complete because an agent says it is done. Completion requires the configured acceptance criteria and verification evidence to pass.
+
+The OPI contract also documents current integration gaps: some correlation fields are not first-class task fields, the pilot bridge is in-process, a durable cross-system evidence index is missing, and production wiring/recovery still need verification. Treat this as an integration target, not a production-ready API guarantee.
+
+## 5. Canonical ownership and persistence
 
 - USIE remains canonical for capture history and capture artifacts. Its `captures` records are append-only apart from the documented finalization transition; each recollection is a new capture.
 - The USIE `social_evidence` object is a read-only, lossy compatibility view over the latest capture. OCIF must not write to it and must not use it when distinctions among `blocked`, `unavailable`, and `failed` matter.
@@ -73,7 +81,7 @@ Publishing is a later milestone, not part of the first ingestion proof. Until OI
 - OPI owns project/task state. OIS owns governed execution state and authorization. Do not introduce shadow copies as authoritative stores.
 - Select database technology and storage placement only after inspecting existing OIS/OCIF constraints, deployment targets, volume, privacy requirements and recovery needs. Do not add a new queue or database by default.
 
-## 5. Evidence vs. interpretation
+## 6. Evidence vs. interpretation
 
 Every downstream record must distinguish:
 1. **Observed evidence:** source URL, capture ID, artifact IDs/hashes, capture time, extracted fields and extractor version.
@@ -84,7 +92,7 @@ Every downstream record must distinguish:
 
 Model-generated interpretations must not be stored or displayed as source facts. Claims in research briefs should link to evidence and expose uncertainty or missing support.
 
-## 6. Trust boundaries
+## 7. Trust boundaries
 
 - Treat collected HTML, text, metadata, screenshots, and social posts as untrusted data, including any embedded prompt-like instructions.
 - Keep credentials and authenticated browser state outside repositories and normal evidence exports.
@@ -92,7 +100,7 @@ Model-generated interpretations must not be stored or displayed as source facts.
 - Respect platform rules, user authorization, privacy, rate limits and retention obligations.
 - Require explicit authorization for external side effects. An LLM-generated plan is not an authorization token.
 
-## 7. Architecture decisions required before implementation
+## 8. Architecture decisions required before implementation
 
 Create reviewed ADRs before:
 - choosing the OCIF canonical knowledge schema and identifiers;
@@ -102,10 +110,11 @@ Create reviewed ADRs before:
 - choosing publishing providers and the OIS execution interface;
 - defining data retention, deletion, access, and evidence-export policy.
 
-## 8. Live source references
+## 9. Live source references
 
 - [NUEGS](https://github.com/niceoneobsidian/niceone-engineering-governance)
 - [OPI](https://github.com/niceoneobsidian/obsidian-project-intelligence)
+- [OPI integration contract](https://github.com/niceoneobsidian/obsidian-project-intelligence/blob/main/docs/project-intelligence/integration-contract.md)
 - [OIS](https://github.com/niceoneobsidian/niceone-obsidian)
 - [USIE README](https://github.com/niceoneobsidian/universal-social-intelligence/blob/main/README.md)
 - [USIE architecture](https://github.com/niceoneobsidian/universal-social-intelligence/blob/main/docs/ARCHITECTURE.md)
