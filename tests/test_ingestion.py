@@ -5,8 +5,8 @@ import pathlib
 import tempfile
 import unittest
 
-from ocif.ingestion import OCIFStore, validate_envelope
-from ocif.retrieval import build_index, evaluate_retrieval, evidence_linked_brief, retrieve
+import ocif.ingestion as ingestion
+import ocif.retrieval as retrieval
 
 
 ARTIFACT_HASH = hashlib.sha256(b"fixture evidence").hexdigest()
@@ -61,7 +61,7 @@ def payload(*, capture_id: str = "capture-1", status: str = "success") -> dict:
 class IngestionTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
-        self.store = OCIFStore(str(pathlib.Path(self.tmp.name) / "ocif.sqlite3"))
+        self.store = ingestion.OCIFStore(str(pathlib.Path(self.tmp.name) / "ocif.sqlite3"))
 
     def tearDown(self) -> None:
         self.store.close()
@@ -69,7 +69,7 @@ class IngestionTests(unittest.TestCase):
 
     def test_valid_payload_is_imported_and_reimport_is_idempotent(self) -> None:
         item = payload()
-        self.assertEqual(validate_envelope(item)["capture_status"], "success")
+        self.assertEqual(ingestion.validate_envelope(item)["capture_status"], "success")
         first = self.store.import_payload(item)
         second = self.store.import_payload(item)
         self.assertEqual(first.status, "accepted")
@@ -131,16 +131,16 @@ class IngestionTests(unittest.TestCase):
 
     def test_index_retrieval_and_evidence_linked_brief(self) -> None:
         self.store.import_payload(payload())
-        self.assertGreaterEqual(build_index(self.store, chunk_size=120, overlap=20), 1)
-        results = retrieve(self.store, "football strategy", top_k=3)
+        self.assertGreaterEqual(retrieval.build_index(self.store, chunk_size=120, overlap=20), 1)
+        results = retrieval.retrieve(self.store, "football strategy", top_k=3)
         self.assertTrue(results)
         self.assertEqual(results[0].capture_id, "capture-1")
         self.assertTrue(results[0].artifacts)
-        brief = evidence_linked_brief(self.store, "football strategy")
+        brief = retrieval.evidence_linked_brief(self.store, "football strategy")
         self.assertFalse(brief["unsupported"])
         self.assertEqual(brief["mode"], "extractive_evidence_only")
         chunk_id = results[0].chunk_id
-        metrics = evaluate_retrieval(self.store, "football strategy", [chunk_id], top_k=3)
+        metrics = retrieval.evaluate_retrieval(self.store, "football strategy", [chunk_id], top_k=3)
         self.assertEqual(metrics["recall_at_k"], 1.0)
         self.assertEqual(metrics["mrr"], 1.0)
 
