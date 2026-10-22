@@ -5,8 +5,7 @@ import pathlib
 import tempfile
 import unittest
 
-import ocif.ingestion as ingestion
-import ocif.retrieval as retrieval
+from ocif import ingestion, retrieval
 
 
 ARTIFACT_HASH = hashlib.sha256(b"fixture evidence").hexdigest()
