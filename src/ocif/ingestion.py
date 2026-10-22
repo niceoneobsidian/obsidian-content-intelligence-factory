@@ -283,7 +283,10 @@ class OCIFStore:
 
     def import_payload(self, payload: Mapping[str, Any]) -> ImportResult:
         started = time.perf_counter()
-        raw_hash = _digest(payload) if isinstance(payload, Mapping) else _digest({"invalid": str(type(payload))})
+        try:
+            raw_hash = _digest(payload) if isinstance(payload, Mapping) else _digest({"invalid": str(type(payload))})
+        except (TypeError, ValueError):
+            raw_hash = hashlib.sha256(f"invalid:{type(payload).__name__}".encode("utf-8")).hexdigest()
         try:
             envelope = validate_envelope(payload)
         except ContractError as exc:
