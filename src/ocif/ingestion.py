@@ -344,7 +344,7 @@ class OCIFStore:
                 capture_status, status_reason, error_code, captured_at, completed_at, platform,
                 producer_revision, extraction_json, artifacts_json, warnings_json,
                 payload_hash, ingested_at, ingest_latency_ms
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 envelope["contract_version"], envelope["source_id"], envelope["capture_id"],
                 envelope["submitted_url"], envelope["normalized_url"], envelope["capture_status"],
