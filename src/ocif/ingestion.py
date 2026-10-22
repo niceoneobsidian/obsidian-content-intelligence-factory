@@ -374,9 +374,14 @@ class OCIFStore:
         extraction_counts: dict[str, int] = {}
         provenance_complete = 0
         latency_values: list[float] = []
+        capture_latency_values: list[float] = []
         for row in rows:
             counts[row["capture_status"]] = counts.get(row["capture_status"], 0) + 1
             latency_values.append(float(row["ingest_latency_ms"]))
+            if row["captured_at"] and row["completed_at"]:
+                start = datetime.fromisoformat(row["captured_at"])
+                end = datetime.fromisoformat(row["completed_at"])
+                capture_latency_values.append(max(0.0, (end - start).total_seconds() * 1000.0))
             extraction = json.loads(row["extraction_json"]) if row["extraction_json"] else None
             if extraction:
                 extraction_status = str(extraction.get("status", "unknown"))
@@ -400,11 +405,14 @@ class OCIFStore:
             "SELECT AVG(recall_at_k), AVG(reciprocal_rank), AVG(precision_at_k) FROM retrieval_evaluations"
         ).fetchone()
         delivered = accepted + duplicates + quarantined
+        extraction_attempts = sum(extraction_counts.values())
         return {
             "observations": total,
             "capture_status_counts": counts,
             "extraction_status_counts": extraction_counts,
-            "extraction_success_rate": (extraction_counts.get("success", 0) / total) if total else None,
+            "capture_success_rate": (counts.get("success", 0) / total) if total else None,
+            "extraction_success_rate": (extraction_counts.get("success", 0) / extraction_attempts) if extraction_attempts else None,
+            "extraction_partial_rate": (extraction_counts.get("partial", 0) / extraction_attempts) if extraction_attempts else None,
             "partial_rate": (counts.get("partial", 0) / total) if total else None,
             "blocked_rate": (counts.get("blocked", 0) / total) if total else None,
             "unavailable_rate": (counts.get("unavailable", 0) / total) if total else None,
@@ -413,6 +421,7 @@ class OCIFStore:
             "quarantined_count": quarantined,
             "provenance_completeness": (provenance_complete / total) if total else None,
             "ingest_latency_ms_mean": (sum(latency_values) / len(latency_values)) if latency_values else None,
+            "capture_latency_ms_mean": (sum(capture_latency_values) / len(capture_latency_values)) if capture_latency_values else None,
             "retrieval_recall_at_k_mean": evals[0],
             "retrieval_mrr_mean": evals[1],
             "retrieval_precision_at_k_mean": evals[2],
