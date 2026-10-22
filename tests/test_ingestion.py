@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import hashlib
+from pathlib import Path
 import tempfile
 import unittest
-from pathlib import Path
 
 from ocif.ingestion import OCIFStore, validate_envelope
 from ocif.retrieval import build_index, evaluate_retrieval, evidence_linked_brief, retrieve
