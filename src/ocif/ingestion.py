@@ -128,7 +128,7 @@ def validate_envelope(payload: Mapping[str, Any]) -> dict[str, Any]:
             raise ContractError(f"artifacts[{index}].byte_size: expected non-negative integer")
         location = _required_string(artifact, "location")
         relative = PurePosixPath(location)
-        if relative.is_absolute() or ".." in relative.parts or "\\\\" in location or ":" in location:
+        if relative.is_absolute() or ".." in relative.parts or "\\" in location or ":" in location:
             raise ContractError(f"artifacts[{index}].location: expected a safe relative path")
         artifact_by_id[artifact_id] = {
             "artifact_id": artifact_id,
