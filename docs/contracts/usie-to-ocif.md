@@ -2,7 +2,7 @@
 
 **Contract ID:** `ocif.usie-import`  
 **Version:** `0.1.0-draft`  
-**Status:** Draft for joint review; not an implemented API or export format
+**Status:** Candidate contract implemented in open PRs; not merged or stable
 
 ## 1. Purpose
 
@@ -16,7 +16,7 @@ This document is a proposed consumer contract. It does not assert that USIE curr
 2. Never infer successful extraction from a page load, screenshot, DOM snapshot or HTTP 200 alone.
 3. Every imported observation must have stable source identity, capture identity, explicit outcome, timestamps and provenance.
 4. Import is idempotent for the same source capture and contract version; a later recapture is a new observation, not an overwrite.
-5. Unknown fields may be preserved in a raw metadata envelope if safe, but must not silently become trusted facts.
+5. This strict candidate rejects unknown fields; extensibility requires a reviewed contract-version change. Unknown data must not silently become trusted facts.
 6. Invalid or incomplete records are quarantined/rejected with a reason. They must not silently disappear or be upgraded to success.
 7. Raw evidence stays in USIE unless a reviewed data-transfer policy explicitly allows copying it. OCIF may store references, hashes, approved excerpts and normalized metadata.
 8. Contract/schema changes are versioned and tested by both producer and consumer.
@@ -30,13 +30,13 @@ The exact field names are proposed and require mapping to the actual USIE schema
 | `contract_version` | Yes | Version of this consumer contract |
 | `source_id` | Yes | USIE's stable source identifier |
 | `submitted_url` | Yes | URL as submitted for the collection job, preserved verbatim |
-| `normalized_url` | Yes, if available | URL used for canonical source identity |
+| `normalized_url` | Yes | URL used for canonical source identity |
 | `capture_id` | Yes | Unique capture attempt identifier |
 | `capture_status` | Yes | Exact canonical USIE outcome; no lossy remapping |
 | `status_reason` | Yes, when present | Evidence-based reason code or explanation |\n| `error_code` | Yes, when present | Canonical producer error code; never inferred by the consumer |
-| `captured_at` | Yes, if capture started | Timestamp with timezone |
-| `completed_at` | Yes, if finalized | Timestamp with timezone |
-| `artifacts[]` | Yes, possibly empty | Artifact ID/type, relative or resolvable location, SHA-256, byte size and media type when known |
+| `captured_at` | Yes | Timestamp with timezone |
+| `completed_at` | Yes | Timestamp with timezone; accepted imports must be finalized |
+| `artifacts[]` | Yes, possibly empty | Artifact ID/type, safe relative location, SHA-256, non-negative byte size and media type |
 | `extraction` | Conditional | Extractor ID/version, schema version, validation outcome, fields and evidence references |
 | `platform` | If known | Router/platform classification; not a guarantee of adapter support |
 | `producer_revision` | Yes | USIE commit/version that produced the record |
@@ -46,14 +46,14 @@ Do not include cookies, authorization headers, raw secrets, or unredacted sessio
 
 ## 4. Outcome semantics
 
-Preserve the exact canonical USIE status. At the current documented stage, statuses include `success`, `partial`, `blocked`, `unavailable`, `failed`, and cancellation/interruption outcomes as defined by the live schema.
+Preserve the exact canonical USIE status. This candidate accepts exactly `success`, `partial`, `blocked`, `unavailable`, `failed`, and `cancelled`. A new live-schema status must be mapped in a reviewed contract update; until then it is rejected/quarantined.
 
 - `success`: accepted only when USIE's validated extraction rules say success.
 - `partial`: evidence exists but required extraction or validation is incomplete.
 - `blocked`: access denial or an observed access wall, according to USIE rules.
 - `unavailable`: an observed not-found/unavailable outcome; do not infer deletion from a generic network error.
 - `failed`: collection or processing failure with an error code/reason.
-- cancelled/interrupted: preserve the exact canonical value and reason if the schema supports it; do not collapse it to `failed` without an explicit mapping.
+- `cancelled`: preserve the canonical value and reason; do not collapse it to `failed`.
 
 The consumer must tolerate new statuses by safely quarantining unknown values and surfacing a compatibility error rather than guessing.
 
