@@ -18,7 +18,9 @@ from typing import Any
 from urllib.parse import urlsplit
 
 CONTRACT_VERSION = "0.1.0"
-SUPPORTED_STATUSES = frozenset(\n    {"success", "partial", "blocked", "unavailable", "failed", "cancelled"}\n)
+SUPPORTED_STATUSES = frozenset(
+    {"success", "partial", "blocked", "unavailable", "failed", "cancelled"}
+)
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 KNOWN_TOP_LEVEL = frozenset(
     {
@@ -93,7 +95,8 @@ def validate_envelope(payload: Mapping[str, Any]) -> dict[str, Any]:
         raise ContractError("payload: expected a JSON object")
     unknown = set(payload) - KNOWN_TOP_LEVEL
     if unknown:
-        details = ", ".join(sorted(str(key) for key in unknown))\n        raise ContractError("unsupported top-level fields: " + details)
+        details = ", ".join(sorted(str(key) for key in unknown))
+        raise ContractError("unsupported top-level fields: " + details)
     version = _required_string(payload, "contract_version")
     if version != CONTRACT_VERSION:
         raise ContractError(f"unsupported contract_version: {version}")
@@ -114,7 +117,10 @@ def validate_envelope(payload: Mapping[str, Any]) -> dict[str, Any]:
     for index, artifact in enumerate(artifacts):
         if not isinstance(artifact, Mapping):
             raise ContractError(f"artifacts[{index}]: expected an object")
-        allowed_artifact_fields = {\n            "artifact_id", "kind", "location", "sha256", "byte_size", "media_type"\n        }\n        unknown_artifact_fields = set(artifact) - allowed_artifact_fields
+        allowed_artifact_fields = {
+            "artifact_id", "kind", "location", "sha256", "byte_size", "media_type"
+        }
+        unknown_artifact_fields = set(artifact) - allowed_artifact_fields
         if unknown_artifact_fields:
             raise ContractError(f"artifacts[{index}]: unsupported fields")
         artifact_id = _required_string(artifact, "artifact_id")
@@ -143,7 +149,11 @@ def validate_envelope(payload: Mapping[str, Any]) -> dict[str, Any]:
     if extraction is not None:
         if not isinstance(extraction, Mapping):
             raise ContractError("extraction: expected an object or null")
-        allowed_extraction_fields = {\n            "extraction_id", "extractor", "extractor_version", "schema_version", "status",\n            "post_text", "author", "title", "canonical_url", "metadata", "provenance",\n        }\n        unknown_extraction_fields = set(extraction) - allowed_extraction_fields
+        allowed_extraction_fields = {
+            "extraction_id", "extractor", "extractor_version", "schema_version", "status",
+            "post_text", "author", "title", "canonical_url", "metadata", "provenance",
+        }
+        unknown_extraction_fields = set(extraction) - allowed_extraction_fields
         if unknown_extraction_fields:
             raise ContractError("extraction: unsupported fields")
         extraction_status = _required_string(extraction, "status")
@@ -157,7 +167,10 @@ def validate_envelope(payload: Mapping[str, Any]) -> dict[str, Any]:
             raise ContractError("extraction.provenance: expected an object")
         checked_provenance: dict[str, dict[str, str]] = {}
         for field, reference in provenance.items():
-            if (\n                not isinstance(field, str) or not field.strip()\n                or not isinstance(reference, Mapping)\n            ):
+            if (
+                not isinstance(field, str) or not field.strip()
+                or not isinstance(reference, Mapping)
+            ):
                 raise ContractError("extraction.provenance: malformed field reference")
             if set(reference) - {"artifact_id", "artifact_sha256", "locator"}:
                 raise ContractError(f"extraction.provenance.{field}: unsupported fields")
@@ -186,15 +199,22 @@ def validate_envelope(payload: Mapping[str, Any]) -> dict[str, Any]:
             "schema_version": str(extraction.get("schema_version", "1")),
             "status": extraction_status,
             "post_text": post_text.strip() if isinstance(post_text, str) else None,
-            "author": (\n                extraction.get("author") if isinstance(extraction.get("author"), str) else None\n            ),
+            "author": (
+                extraction.get("author") if isinstance(extraction.get("author"), str) else None
+            ),
             "title": extraction.get("title") if isinstance(extraction.get("title"), str) else None,
-            "canonical_url": _url(\n                extraction.get("canonical_url"), "extraction.canonical_url", required=False\n            ),
+            "canonical_url": _url(
+                extraction.get("canonical_url"), "extraction.canonical_url", required=False
+            ),
             "metadata": extraction.get("metadata", {}),
             "provenance": checked_provenance,
         }
         if not isinstance(normalized_extraction["metadata"], Mapping):
             raise ContractError("extraction.metadata: expected an object")
-        if any(\n            not isinstance(key, str) or not isinstance(value, str)\n            for key, value in normalized_extraction["metadata"].items()\n        ):
+        if any(
+            not isinstance(key, str) or not isinstance(value, str)
+            for key, value in normalized_extraction["metadata"].items()
+        ):
             raise ContractError("extraction.metadata: keys and values must be strings")
     if status == "success":
         if normalized_extraction is None or normalized_extraction["status"] != "success":
@@ -304,9 +324,14 @@ class OCIFStore:
     def import_payload(self, payload: Mapping[str, Any]) -> ImportResult:
         started = time.perf_counter()
         try:
-            raw_hash = (\n                _digest(payload) if isinstance(payload, Mapping)\n                else _digest({"invalid": str(type(payload))})\n            )
+            raw_hash = (
+                _digest(payload) if isinstance(payload, Mapping)
+                else _digest({"invalid": str(type(payload))})
+            )
         except (TypeError, ValueError):
-            raw_hash = hashlib.sha256(\n                f"invalid:{type(payload).__name__}".encode()\n            ).hexdigest()
+            raw_hash = hashlib.sha256(
+                f"invalid:{type(payload).__name__}".encode()
+            ).hexdigest()
         try:
             envelope = validate_envelope(payload)
         except ContractError as exc:
@@ -316,20 +341,28 @@ class OCIFStore:
             )
             self.connection.execute(
                 "INSERT INTO import_events(event_type, occurred_at, detail_json) VALUES (?, ?, ?)",
-                (\n                    "import.rejected", datetime.now().astimezone().isoformat(),\n                    _canonical_json({"reason": str(exc), "payload_hash": raw_hash}),\n                ),
+                (
+                    "import.rejected", datetime.now().astimezone().isoformat(),
+                    _canonical_json({"reason": str(exc), "payload_hash": raw_hash}),
+                ),
             )
             self.connection.commit()
             return ImportResult("rejected", None, None, str(exc))
         key = (envelope["source_id"], envelope["capture_id"], envelope["contract_version"])
         existing = self.connection.execute(
-            (\n                "SELECT observation_id, payload_hash FROM observations " \n                "WHERE source_id=? AND capture_id=? AND contract_version=?",\n            ),
+            (
+                "SELECT observation_id, payload_hash FROM observations " 
+                "WHERE source_id=? AND capture_id=? AND contract_version=?",
+            ),
             key,
         ).fetchone()
         if existing is not None:
             if existing["payload_hash"] == raw_hash:
                 self._event("import.duplicate", envelope, {"payload_hash": raw_hash})
                 self.connection.commit()
-                return ImportResult(\n                    "duplicate", key[0], key[1], observation_id=existing["observation_id"]\n                )
+                return ImportResult(
+                    "duplicate", key[0], key[1], observation_id=existing["observation_id"]
+                )
             reason = "idempotency key reused with changed payload; possible producer mutation"
             self.connection.execute(
                 "INSERT INTO quarantine(payload_hash, reason, received_at) VALUES (?, ?, ?)",
@@ -349,7 +382,8 @@ class OCIFStore:
             (
                 envelope["contract_version"], envelope["source_id"], envelope["capture_id"],
                 envelope["submitted_url"], envelope["normalized_url"], envelope["capture_status"],
-                envelope["status_reason"], envelope["error_code"],\n                envelope["captured_at"], envelope["completed_at"],
+                envelope["status_reason"], envelope["error_code"],
+                envelope["captured_at"], envelope["completed_at"],
                 envelope["platform"], envelope["producer_revision"],
                 _canonical_json(envelope["extraction"]) if envelope["extraction"] else None,
                 _canonical_json(envelope["artifacts"]), _canonical_json(envelope["warnings"]),
@@ -357,13 +391,21 @@ class OCIFStore:
             ),
         )
         observation_id = int(cursor.lastrowid)
-        self._event(\n            "import.accepted", envelope,\n            {"observation_id": observation_id, "payload_hash": raw_hash},\n        )
+        self._event(
+            "import.accepted", envelope,
+            {"observation_id": observation_id, "payload_hash": raw_hash},
+        )
         self.connection.commit()
         return ImportResult("accepted", key[0], key[1], observation_id=observation_id)
 
-    def _event(\n        self, event_type: str, envelope: Mapping[str, Any], detail: Mapping[str, Any]\n    ) -> None:
+    def _event(
+        self, event_type: str, envelope: Mapping[str, Any], detail: Mapping[str, Any]
+    ) -> None:
         self.connection.execute(
-            (\n                "INSERT INTO import_events(event_type, source_id, capture_id, occurred_at, " \n                "detail_json) VALUES (?, ?, ?, ?, ?)",\n            ),
+            (
+                "INSERT INTO import_events(event_type, source_id, capture_id, occurred_at, " 
+                "detail_json) VALUES (?, ?, ?, ?, ?)",
+            ),
             (event_type, envelope.get("source_id"), envelope.get("capture_id"),
              datetime.now().astimezone().isoformat(), _canonical_json(detail)),
         )
@@ -386,12 +428,15 @@ class OCIFStore:
             extraction = json.loads(row["extraction_json"]) if row["extraction_json"] else None
             if extraction:
                 extraction_status = str(extraction.get("status", "unknown"))
-                extraction_counts[extraction_status] = (\n                    extraction_counts.get(extraction_status, 0) + 1\n                )
+                extraction_counts[extraction_status] = (
+                    extraction_counts.get(extraction_status, 0) + 1
+                )
             artifacts = json.loads(row["artifacts_json"])
             artifact_hashes = {item["artifact_id"]: item["sha256"] for item in artifacts}
             provenance = extraction.get("provenance", {}) if extraction else {}
             if provenance and artifacts and all(
-                isinstance(ref, dict)\n                and artifact_hashes.get(ref.get("artifact_id")) == ref.get("artifact_sha256")
+                isinstance(ref, dict)
+                and artifact_hashes.get(ref.get("artifact_id")) == ref.get("artifact_sha256")
                 for ref in provenance.values()
             ):
                 provenance_complete += 1
@@ -403,7 +448,8 @@ class OCIFStore:
         ).fetchone()[0]
         quarantined = self.connection.execute("SELECT COUNT(*) FROM quarantine").fetchone()[0]
         evals = self.connection.execute(
-            "SELECT AVG(recall_at_k), AVG(reciprocal_rank), " \n            "AVG(precision_at_k) FROM retrieval_evaluations"
+            "SELECT AVG(recall_at_k), AVG(reciprocal_rank), " 
+            "AVG(precision_at_k) FROM retrieval_evaluations"
         ).fetchone()
         delivered = accepted + duplicates + quarantined
         extraction_attempts = sum(extraction_counts.values())
@@ -412,8 +458,14 @@ class OCIFStore:
             "capture_status_counts": counts,
             "extraction_status_counts": extraction_counts,
             "capture_success_rate": (counts.get("success", 0) / total) if total else None,
-            "extraction_success_rate": (\n                extraction_counts.get("success", 0) / extraction_attempts\n                if extraction_attempts else None\n            ),
-            "extraction_partial_rate": (\n                extraction_counts.get("partial", 0) / extraction_attempts\n                if extraction_attempts else None\n            ),
+            "extraction_success_rate": (
+                extraction_counts.get("success", 0) / extraction_attempts
+                if extraction_attempts else None
+            ),
+            "extraction_partial_rate": (
+                extraction_counts.get("partial", 0) / extraction_attempts
+                if extraction_attempts else None
+            ),
             "partial_rate": (counts.get("partial", 0) / total) if total else None,
             "blocked_rate": (counts.get("blocked", 0) / total) if total else None,
             "unavailable_rate": (counts.get("unavailable", 0) / total) if total else None,
@@ -421,8 +473,13 @@ class OCIFStore:
             "duplicate_rate": (duplicates / delivered) if delivered else 0.0,
             "quarantined_count": quarantined,
             "provenance_completeness": (provenance_complete / total) if total else None,
-            "ingest_latency_ms_mean": (\n                sum(latency_values) / len(latency_values) if latency_values else None\n            ),
-            "capture_latency_ms_mean": (\n                sum(capture_latency_values) / len(capture_latency_values)\n                if capture_latency_values else None\n            ),
+            "ingest_latency_ms_mean": (
+                sum(latency_values) / len(latency_values) if latency_values else None
+            ),
+            "capture_latency_ms_mean": (
+                sum(capture_latency_values) / len(capture_latency_values)
+                if capture_latency_values else None
+            ),
             "retrieval_recall_at_k_mean": evals[0],
             "retrieval_mrr_mean": evals[1],
             "retrieval_precision_at_k_mean": evals[2],
