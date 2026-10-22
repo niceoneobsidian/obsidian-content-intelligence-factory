@@ -114,7 +114,7 @@ class IngestionTests(unittest.TestCase):
         self.assertEqual(self.store.import_payload(item).status, "rejected")
 
     def test_hostile_or_malformed_input_does_not_crash_consumer(self) -> None:
-        self.assertEqual(self.store.import_payload({"contract_version": "0.1.0"}).status, "rejected")
+        result = self.store.import_payload({"contract_version": "0.1.0"})\n        self.assertEqual(result.status, "rejected")
         self.assertEqual(self.store.import_payload({"not": object()}).status, "rejected")
 
     def test_blocked_status_is_preserved_not_upgraded(self) -> None:
