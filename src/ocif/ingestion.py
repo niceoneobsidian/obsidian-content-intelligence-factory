@@ -109,6 +109,8 @@ def validate_envelope(payload: Mapping[str, Any]) -> dict[str, Any]:
         raise ContractError(f"unsupported capture_status: {status}")
     captured_at = _timestamp(payload.get("captured_at"), "captured_at", required=True)
     completed_at = _timestamp(payload.get("completed_at"), "completed_at", required=True)
+    if datetime.fromisoformat(completed_at) < datetime.fromisoformat(captured_at):
+        raise ContractError("completed_at must not precede captured_at")
     producer_revision = _required_string(payload, "producer_revision")
     artifacts = payload.get("artifacts")
     if not isinstance(artifacts, list):
@@ -162,6 +164,13 @@ def validate_envelope(payload: Mapping[str, Any]) -> dict[str, Any]:
         post_text = extraction.get("post_text")
         if post_text is not None and not isinstance(post_text, str):
             raise ContractError("extraction.post_text: expected string or null")
+        for optional_text_field in ("author", "title"):
+            value = extraction.get(optional_text_field)
+            if value is not None and not isinstance(value, str):
+                raise ContractError(f"extraction.{optional_text_field}: expected string or null")
+        schema_version = extraction.get("schema_version", "1")
+        if not isinstance(schema_version, str) or not schema_version.strip():
+            raise ContractError("extraction.schema_version: expected non-empty string")
         provenance = extraction.get("provenance", {})
         if not isinstance(provenance, Mapping):
             raise ContractError("extraction.provenance: expected an object")
@@ -196,7 +205,7 @@ def validate_envelope(payload: Mapping[str, Any]) -> dict[str, Any]:
             "extraction_id": _required_string(extraction, "extraction_id"),
             "extractor": _required_string(extraction, "extractor"),
             "extractor_version": _required_string(extraction, "extractor_version"),
-            "schema_version": str(extraction.get("schema_version", "1")),
+            "schema_version": schema_version,
             "status": extraction_status,
             "post_text": post_text.strip() if isinstance(post_text, str) else None,
             "author": (
