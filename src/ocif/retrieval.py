@@ -89,7 +89,7 @@ def build_index(store: OCIFStore, *, chunk_size: int = 600, overlap: int = 80) -
         ]
         for ordinal, chunk in enumerate(_chunk_text(text, chunk_size, overlap)):
             chunk_id = hashlib.sha256(
-                f"{row['observation_id']}:{ordinal}:{chunk}".encode("utf-8")
+                f"{row['observation_id']}:{ordinal}:{chunk}".encode()
             ).hexdigest()
             cursor = connection.execute(
                 """INSERT OR IGNORE INTO chunks(
