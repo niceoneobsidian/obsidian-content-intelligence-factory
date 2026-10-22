@@ -10,9 +10,10 @@ import json
 import re
 import sqlite3
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
-from collections.abc import Mapping
+from pathlib import PurePosixPath
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -60,7 +61,10 @@ def _url(value: Any, field: str, required: bool = True) -> str | None:
         return None
     if not isinstance(value, str) or not value.strip():
         raise ContractError(f"{field}: URL is required")
-    parts = urlsplit(value)
+    try:
+        parts = urlsplit(value)
+    except ValueError as exc:
+        raise ContractError(f"{field}: malformed URL") from exc
     if parts.scheme not in {"http", "https"} or not parts.hostname:
         raise ContractError(f"{field}: only absolute HTTP(S) URLs are supported")
     if parts.username is not None or parts.password is not None:
@@ -100,8 +104,8 @@ def validate_envelope(payload: Mapping[str, Any]) -> dict[str, Any]:
     status = _required_string(payload, "capture_status")
     if status not in SUPPORTED_STATUSES:
         raise ContractError(f"unsupported capture_status: {status}")
-    captured_at = _timestamp(payload.get("captured_at"), "captured_at", required=status not in {"queued"})
-    completed_at = _timestamp(payload.get("completed_at"), "completed_at")
+    captured_at = _timestamp(payload.get("captured_at"), "captured_at", required=True)
+    completed_at = _timestamp(payload.get("completed_at"), "completed_at", required=True)
     producer_revision = _required_string(payload, "producer_revision")
     artifacts = payload.get("artifacts")
     if not isinstance(artifacts, list):
@@ -110,6 +114,9 @@ def validate_envelope(payload: Mapping[str, Any]) -> dict[str, Any]:
     for index, artifact in enumerate(artifacts):
         if not isinstance(artifact, Mapping):
             raise ContractError(f"artifacts[{index}]: expected an object")
+        unknown_artifact_fields = set(artifact) - {"artifact_id", "kind", "location", "sha256", "byte_size", "media_type"}
+        if unknown_artifact_fields:
+            raise ContractError(f"artifacts[{index}]: unsupported fields")
         artifact_id = _required_string(artifact, "artifact_id")
         if artifact_id in artifact_by_id:
             raise ContractError(f"artifacts[{index}]: duplicate artifact_id")
@@ -119,10 +126,14 @@ def validate_envelope(payload: Mapping[str, Any]) -> dict[str, Any]:
         size = artifact.get("byte_size")
         if not isinstance(size, int) or isinstance(size, bool) or size < 0:
             raise ContractError(f"artifacts[{index}].byte_size: expected non-negative integer")
+        location = _required_string(artifact, "location")
+        relative = PurePosixPath(location)
+        if relative.is_absolute() or ".." in relative.parts or "\\\\" in location or ":" in location:
+            raise ContractError(f"artifacts[{index}].location: expected a safe relative path")
         artifact_by_id[artifact_id] = {
             "artifact_id": artifact_id,
             "kind": _required_string(artifact, "kind"),
-            "location": _required_string(artifact, "location"),
+            "location": location,
             "sha256": sha,
             "byte_size": size,
             "media_type": str(artifact.get("media_type") or "application/octet-stream"),
@@ -132,6 +143,9 @@ def validate_envelope(payload: Mapping[str, Any]) -> dict[str, Any]:
     if extraction is not None:
         if not isinstance(extraction, Mapping):
             raise ContractError("extraction: expected an object or null")
+        unknown_extraction_fields = set(extraction) - {"extraction_id", "extractor", "extractor_version", "schema_version", "status", "post_text", "author", "title", "canonical_url", "metadata", "provenance"}
+        if unknown_extraction_fields:
+            raise ContractError("extraction: unsupported fields")
         extraction_status = _required_string(extraction, "status")
         if extraction_status not in {"success", "partial"}:
             raise ContractError(f"extraction.status: unsupported value {extraction_status}")
@@ -145,6 +159,8 @@ def validate_envelope(payload: Mapping[str, Any]) -> dict[str, Any]:
         for field, reference in provenance.items():
             if not isinstance(field, str) or not field.strip() or not isinstance(reference, Mapping):
                 raise ContractError("extraction.provenance: malformed field reference")
+            if set(reference) - {"artifact_id", "artifact_sha256", "locator"}:
+                raise ContractError(f"extraction.provenance.{field}: unsupported fields")
             artifact_id = _required_string(reference, "artifact_id")
             artifact_hash = reference.get("artifact_sha256")
             if not isinstance(artifact_hash, str) or not SHA256_RE.fullmatch(artifact_hash):
@@ -350,8 +366,24 @@ class OCIFStore:
         rows = self.connection.execute("SELECT * FROM observations").fetchall()
         total = len(rows)
         counts: dict[str, int] = {}
+        extraction_counts: dict[str, int] = {}
+        provenance_complete = 0
+        latency_values: list[float] = []
         for row in rows:
             counts[row["capture_status"]] = counts.get(row["capture_status"], 0) + 1
+            latency_values.append(float(row["ingest_latency_ms"]))
+            extraction = json.loads(row["extraction_json"]) if row["extraction_json"] else None
+            if extraction:
+                extraction_status = str(extraction.get("status", "unknown"))
+                extraction_counts[extraction_status] = extraction_counts.get(extraction_status, 0) + 1
+            artifacts = json.loads(row["artifacts_json"])
+            artifact_hashes = {item["artifact_id"]: item["sha256"] for item in artifacts}
+            provenance = extraction.get("provenance", {}) if extraction else {}
+            if provenance and artifacts and all(
+                isinstance(ref, dict) and artifact_hashes.get(ref.get("artifact_id")) == ref.get("artifact_sha256")
+                for ref in provenance.values()
+            ):
+                provenance_complete += 1
         accepted = self.connection.execute(
             "SELECT COUNT(*) FROM import_events WHERE event_type='import.accepted'"
         ).fetchone()[0]
@@ -359,14 +391,6 @@ class OCIFStore:
             "SELECT COUNT(*) FROM import_events WHERE event_type='import.duplicate'"
         ).fetchone()[0]
         quarantined = self.connection.execute("SELECT COUNT(*) FROM quarantine").fetchone()[0]
-        provenance_complete = 0
-        latency_values: list[float] = []
-        for row in rows:
-            latency_values.append(float(row["ingest_latency_ms"]))
-            extraction = json.loads(row["extraction_json"]) if row["extraction_json"] else None
-            artifacts = json.loads(row["artifacts_json"])
-            if extraction and extraction.get("provenance") and artifacts:
-                provenance_complete += 1
         evals = self.connection.execute(
             "SELECT AVG(recall_at_k), AVG(reciprocal_rank), AVG(precision_at_k) FROM retrieval_evaluations"
         ).fetchone()
@@ -374,7 +398,8 @@ class OCIFStore:
         return {
             "observations": total,
             "capture_status_counts": counts,
-            "extraction_success_rate": (counts.get("success", 0) / total) if total else None,
+            "extraction_status_counts": extraction_counts,
+            "extraction_success_rate": (extraction_counts.get("success", 0) / total) if total else None,
             "partial_rate": (counts.get("partial", 0) / total) if total else None,
             "blocked_rate": (counts.get("blocked", 0) / total) if total else None,
             "unavailable_rate": (counts.get("unavailable", 0) / total) if total else None,
