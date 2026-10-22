@@ -67,7 +67,7 @@ def _chunk_text(text: str, chunk_size: int, overlap: int) -> list[str]:
 
 
 def build_index(store: OCIFStore, *, chunk_size: int = 600, overlap: int = 80) -> int:
-    """Chunk validated evidence text. Re-running is idempotent for unchanged records."""
+    """Chunk validated evidence text and maintain an idempotent inverted term index."""
     connection = store.connection
     rows = connection.execute(
         """SELECT observation_id, source_id, capture_id, capture_status,
@@ -83,8 +83,12 @@ def build_index(store: OCIFStore, *, chunk_size: int = 600, overlap: int = 80) -
         if not isinstance(text, str) or not text.strip() or not provenance:
             continue
         artifact_refs = [
-            {"artifact_id": ref["artifact_id"], "artifact_sha256": ref["artifact_sha256"],
-             "field": field, "locator": ref["locator"]}
+            {
+                "artifact_id": ref["artifact_id"],
+                "artifact_sha256": ref["artifact_sha256"],
+                "field": field,
+                "locator": ref["locator"],
+            }
             for field, ref in sorted(provenance.items())
         ]
         for ordinal, chunk in enumerate(_chunk_text(text, chunk_size, overlap)):
@@ -95,53 +99,77 @@ def build_index(store: OCIFStore, *, chunk_size: int = 600, overlap: int = 80) -
                 """INSERT OR IGNORE INTO chunks(
                     chunk_id, observation_id, ordinal, text, artifact_refs_json, created_at
                 ) VALUES (?, ?, ?, ?, ?, ?)""",
-                (chunk_id, row["observation_id"], ordinal, chunk, _canonical_json(artifact_refs),
-                 datetime.now().astimezone().isoformat()),
+                (
+                    chunk_id,
+                    row["observation_id"],
+                    ordinal,
+                    chunk,
+                    _canonical_json(artifact_refs),
+                    datetime.now().astimezone().isoformat(),
+                ),
             )
             added += cursor.rowcount
+            for term, frequency in Counter(_tokens(chunk)).items():
+                connection.execute(
+                    """INSERT OR IGNORE INTO chunk_terms(term, chunk_id, frequency)
+                       VALUES (?, ?, ?)""",
+                    (term, chunk_id, frequency),
+                )
     connection.commit()
     return added
 
 
-def retrieve(store: OCIFStore, query: str, *, top_k: int = 5,
-             allowed_statuses: Iterable[str] = ("success", "partial")) -> list[RetrievedChunk]:
-    """Lexical baseline retrieval with status filtering applied before ranking."""
+def retrieve(
+    store: OCIFStore,
+    query: str,
+    *,
+    top_k: int = 5,
+    allowed_statuses: Iterable[str] = ("success", "partial"),
+) -> list[RetrievedChunk]:
+    """Search the SQLite inverted index after applying outcome-status restrictions."""
     if not query.strip():
         raise ValueError("query must not be empty")
     if top_k < 1:
         raise ValueError("top_k must be positive")
+    query_counts = Counter(_tokens(query))
+    if not query_counts:
+        return []
     allowed = tuple(sorted(set(allowed_statuses)))
     if not allowed:
         return []
-    placeholders = ",".join("?" for _ in allowed)
+    status_placeholders = ",".join("?" for _ in allowed)
+    term_placeholders = ",".join("?" for _ in query_counts)
     rows = store.connection.execute(
         f"""SELECT c.chunk_id, c.text, c.artifact_refs_json, o.source_id, o.capture_id,
-                   o.capture_status, o.submitted_url, o.artifacts_json
-            FROM chunks c JOIN observations o USING(observation_id)
-            WHERE o.capture_status IN ({placeholders})""",
-        allowed,
+                   o.capture_status, o.submitted_url, o.artifacts_json,
+                   ct.term, ct.frequency
+            FROM chunk_terms ct
+            JOIN chunks c USING(chunk_id)
+            JOIN observations o USING(observation_id)
+            WHERE o.capture_status IN ({status_placeholders})
+              AND ct.term IN ({term_placeholders})""",
+        (*allowed, *query_counts.keys()),
     ).fetchall()
-    query_tokens = _tokens(query)
-    if not query_tokens:
-        return []
-    query_counts = Counter(query_tokens)
-    ranked: list[RetrievedChunk] = []
+    candidates: dict[str, dict[str, Any]] = {}
     for row in rows:
-        tokens = _tokens(row["text"])
-        counts = Counter(tokens)
-        if not counts:
-            continue
-        # Small, deterministic BM25-inspired score; no external model or network call.
+        candidate = candidates.setdefault(
+            row["chunk_id"], {"row": row, "term_counts": {}}
+        )
+        candidate["term_counts"][row["term"]] = int(row["frequency"])
+    ranked: list[RetrievedChunk] = []
+    for candidate in candidates.values():
+        row = candidate["row"]
+        counts = candidate["term_counts"]
         score = sum(
-            query_counts[token] * (counts[token] / (counts[token] + 1.2))
-            for token in query_counts
+            query_counts[term] * (counts[term] / (counts[term] + 1.2))
+            for term in query_counts
+            if term in counts
         )
         if score <= 0:
             continue
         artifacts = json.loads(row["artifacts_json"])
         hash_by_id = {item["artifact_id"]: item["sha256"] for item in artifacts}
         refs = json.loads(row["artifact_refs_json"])
-        # Every citation returned to callers must still point at an imported artifact hash.
         safe_refs = tuple(
             {
                 **ref,
@@ -151,19 +179,24 @@ def retrieve(store: OCIFStore, query: str, *, top_k: int = 5,
             }
             for ref in refs
         )
-        if not safe_refs or any(ref["artifact_hash_verified"] != "True" for ref in safe_refs):
+        if not safe_refs or any(
+            ref["artifact_hash_verified"] != "True" for ref in safe_refs
+        ):
             continue
         ranked.append(
             RetrievedChunk(
-                chunk_id=row["chunk_id"], text=row["text"], score=score,
-                source_id=row["source_id"], capture_id=row["capture_id"],
-                capture_status=row["capture_status"], submitted_url=row["submitted_url"],
+                chunk_id=row["chunk_id"],
+                text=row["text"],
+                score=score,
+                source_id=row["source_id"],
+                capture_id=row["capture_id"],
+                capture_status=row["capture_status"],
+                submitted_url=row["submitted_url"],
                 artifacts=safe_refs,
             )
         )
     ranked.sort(key=lambda item: (-item.score, item.chunk_id))
     return ranked[:top_k]
-
 
 def evaluate_retrieval(store: OCIFStore, query: str, expected_chunk_ids: Sequence[str],
                        *, top_k: int = 5) -> dict[str, float]:
