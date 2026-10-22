@@ -83,7 +83,7 @@ class IngestionTests(unittest.TestCase):
         mutated["warnings"] = ["changed after initial delivery"]
         result = self.store.import_payload(mutated)
         self.assertEqual(result.status, "rejected")
-        self.assertIn("different payload", result.reason or "")
+        self.assertIn("changed payload", result.reason or "")
 
     def test_recapture_is_a_new_observation(self) -> None:
         self.store.import_payload(payload(capture_id="capture-1"))
