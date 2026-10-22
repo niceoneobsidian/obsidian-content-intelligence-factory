@@ -33,7 +33,8 @@ The exact field names are proposed and require mapping to the actual USIE schema
 | `normalized_url` | Yes | URL used for canonical source identity |
 | `capture_id` | Yes | Unique capture attempt identifier |
 | `capture_status` | Yes | Exact canonical USIE outcome; no lossy remapping |
-| `status_reason` | Yes, when present | Evidence-based reason code or explanation |\n| `error_code` | Yes, when present | Canonical producer error code; never inferred by the consumer |
+| `status_reason` | Yes, when present | Evidence-based reason code or explanation |
+| `error_code` | Yes, when present | Canonical producer error code; never inferred by the consumer |
 | `captured_at` | Yes | Timestamp with timezone |
 | `completed_at` | Yes | Timestamp with timezone; accepted imports must be finalized |
 | `artifacts[]` | Yes, possibly empty | Artifact ID/type, safe relative location, SHA-256, non-negative byte size and media type |
