@@ -143,7 +143,12 @@ def retrieve(store: OCIFStore, query: str, *, top_k: int = 5,
         refs = json.loads(row["artifact_refs_json"])
         # Every citation returned to callers must still point at an imported artifact hash.
         safe_refs = tuple(
-            {\n                **ref,\n                "artifact_hash_verified": str(\n                    hash_by_id.get(ref["artifact_id"]) == ref["artifact_sha256"]\n                ),\n            }
+            {
+                **ref,
+                "artifact_hash_verified": str(
+                    hash_by_id.get(ref["artifact_id"]) == ref["artifact_sha256"]
+                ),
+            }
             for ref in refs
         )
         if not safe_refs or any(ref["artifact_hash_verified"] != "True" for ref in safe_refs):
@@ -206,5 +211,8 @@ def evidence_linked_brief(store: OCIFStore, question: str, *, top_k: int = 5) ->
         "mode": "extractive_evidence_only",
         "claims": claims,
         "unsupported": len(claims) == 0,
-        "warning": (\n            "Retrieved excerpts are evidence, not independently verified truth; " \n            "model inference is not performed."\n        ),
+        "warning": (
+            "Retrieved excerpts are evidence, not independently verified truth; " 
+            "model inference is not performed."
+        ),
     }
