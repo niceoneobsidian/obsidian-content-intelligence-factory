@@ -22,6 +22,7 @@ def payload(*, capture_id: str = "capture-1", status: str = "success") -> dict:
         "capture_id": capture_id,
         "capture_status": status,
         "status_reason": None,
+        "error_code": None,
         "captured_at": "2026-10-22T10:00:00+00:00",
         "completed_at": "2026-10-22T10:00:01+00:00",
         "artifacts": [{
