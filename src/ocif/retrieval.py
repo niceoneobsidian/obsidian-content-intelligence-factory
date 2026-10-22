@@ -8,11 +8,10 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-import sqlite3
 from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Iterable, Sequence
+from collections.abc import Iterable, Sequence
 
 from .ingestion import OCIFStore, _canonical_json
 
