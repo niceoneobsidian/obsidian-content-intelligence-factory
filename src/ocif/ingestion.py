@@ -109,6 +109,8 @@ def validate_envelope(payload: Mapping[str, Any]) -> dict[str, Any]:
         raise ContractError(f"unsupported capture_status: {status}")
     captured_at = _timestamp(payload.get("captured_at"), "captured_at", required=True)
     completed_at = _timestamp(payload.get("completed_at"), "completed_at", required=True)
+    if captured_at is None or completed_at is None:
+        raise ContractError("captured_at and completed_at are required for finalized captures")
     if datetime.fromisoformat(completed_at) < datetime.fromisoformat(captured_at):
         raise ContractError("completed_at must not precede captured_at")
     producer_revision = _required_string(payload, "producer_revision")
