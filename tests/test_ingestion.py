@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import hashlib
-from pathlib import Path
+import pathlib
 import tempfile
 import unittest
 
@@ -61,7 +61,7 @@ def payload(*, capture_id: str = "capture-1", status: str = "success") -> dict:
 class IngestionTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
-        self.store = OCIFStore(str(Path(self.tmp.name) / "ocif.sqlite3"))
+        self.store = OCIFStore(str(pathlib.Path(self.tmp.name) / "ocif.sqlite3"))
 
     def tearDown(self) -> None:
         self.store.close()
