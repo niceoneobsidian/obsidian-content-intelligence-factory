@@ -84,7 +84,7 @@ def _canonical_json(value: Any) -> str:
 
 
 def _digest(value: Any) -> str:
-    return hashlib.sha256(_canonical_json(value).encode("utf-8")).hexdigest()
+    return hashlib.sha256(_canonical_json(value).encode()).hexdigest()
 
 
 def validate_envelope(payload: Mapping[str, Any]) -> dict[str, Any]:
