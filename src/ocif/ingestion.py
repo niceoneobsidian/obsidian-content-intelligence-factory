@@ -350,10 +350,8 @@ class OCIFStore:
             return ImportResult("rejected", None, None, str(exc))
         key = (envelope["source_id"], envelope["capture_id"], envelope["contract_version"])
         existing = self.connection.execute(
-            (
-                "SELECT observation_id, payload_hash FROM observations " 
-                "WHERE source_id=? AND capture_id=? AND contract_version=?",
-            ),
+            "SELECT observation_id, payload_hash FROM observations "
+            "WHERE source_id=? AND capture_id=? AND contract_version=?",
             key,
         ).fetchone()
         if existing is not None:
@@ -402,10 +400,8 @@ class OCIFStore:
         self, event_type: str, envelope: Mapping[str, Any], detail: Mapping[str, Any]
     ) -> None:
         self.connection.execute(
-            (
-                "INSERT INTO import_events(event_type, source_id, capture_id, occurred_at, " 
-                "detail_json) VALUES (?, ?, ?, ?, ?)",
-            ),
+            "INSERT INTO import_events(event_type, source_id, capture_id, occurred_at, "
+            "detail_json) VALUES (?, ?, ?, ?, ?)",
             (event_type, envelope.get("source_id"), envelope.get("capture_id"),
              datetime.now().astimezone().isoformat(), _canonical_json(detail)),
         )
