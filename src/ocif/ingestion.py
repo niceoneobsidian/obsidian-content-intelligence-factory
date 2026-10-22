@@ -315,6 +315,13 @@ class OCIFStore:
                 created_at TEXT NOT NULL,
                 UNIQUE(observation_id, ordinal)
             );
+            CREATE TABLE IF NOT EXISTS chunk_terms (
+                term TEXT NOT NULL,
+                chunk_id TEXT NOT NULL REFERENCES chunks(chunk_id) ON DELETE CASCADE,
+                frequency INTEGER NOT NULL,
+                PRIMARY KEY(term, chunk_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_chunk_terms_term ON chunk_terms(term);
             CREATE TABLE IF NOT EXISTS retrieval_evaluations (
                 evaluation_id INTEGER PRIMARY KEY,
                 query TEXT NOT NULL,
