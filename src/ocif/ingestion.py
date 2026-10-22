@@ -88,6 +88,9 @@ def validate_envelope(payload: Mapping[str, Any]) -> dict[str, Any]:
     """Validate and normalize one envelope; raise ContractError on any unsafe ambiguity."""
     if not isinstance(payload, Mapping):
         raise ContractError("payload: expected a JSON object")
+    unknown = set(payload) - KNOWN_TOP_LEVEL
+    if unknown:
+        raise ContractError("unsupported top-level fields: " + ", ".join(sorted(str(key) for key in unknown)))
     version = _required_string(payload, "contract_version")
     if version != CONTRACT_VERSION:
         raise ContractError(f"unsupported contract_version: {version}")
@@ -176,6 +179,8 @@ def validate_envelope(payload: Mapping[str, Any]) -> dict[str, Any]:
         }
         if not isinstance(normalized_extraction["metadata"], Mapping):
             raise ContractError("extraction.metadata: expected an object")
+        if any(not isinstance(key, str) or not isinstance(value, str) for key, value in normalized_extraction["metadata"].items()):
+            raise ContractError("extraction.metadata: keys and values must be strings")
     if status == "success":
         if normalized_extraction is None or normalized_extraction["status"] != "success":
             raise ContractError("capture success requires a successful validated extraction")
