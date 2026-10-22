@@ -14,6 +14,10 @@ OCIF is the downstream content-intelligence system for Niceone Obsidian. Its tar
 
 OCIF must not duplicate USIE collection/storage, OIS authorization/execution, OPI project/task state, or NUEGS governance registries.
 
+## Implemented baseline in review
+
+A feature branch now contains the first standard-library consumer and retrieval baseline: strict USIE envelope validation, idempotent import/quarantine, artifact-backed provenance, lexical chunk retrieval, evidence-linked excerpts, retrieval evaluation and reliability metrics. See [implementation status and acceptance gate](docs/implementation/ingestion-retrieval.md). This is not yet integration- or production-verified.
+
 ## Start here
 
 1. [System boundaries](docs/architecture/system-boundaries.md)
