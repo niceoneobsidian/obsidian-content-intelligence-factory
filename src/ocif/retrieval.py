@@ -9,9 +9,9 @@ import hashlib
 import json
 import re
 from collections import Counter
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from collections.abc import Iterable, Sequence
 
 from .ingestion import OCIFStore, _canonical_json
 
