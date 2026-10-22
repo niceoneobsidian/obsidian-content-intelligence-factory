@@ -328,6 +328,7 @@ class OCIFStore:
         if existing is not None:
             if existing["payload_hash"] == raw_hash:
                 self._event("import.duplicate", envelope, {"payload_hash": raw_hash})
+                self.connection.commit()
                 return ImportResult("duplicate", key[0], key[1], observation_id=existing["observation_id"])
             reason = "idempotency key already exists with different payload; possible producer mutation"
             self.connection.execute(
