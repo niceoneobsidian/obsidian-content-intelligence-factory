@@ -16,9 +16,7 @@ from typing import Any, Mapping
 from urllib.parse import urlsplit
 
 CONTRACT_VERSION = "0.1.0"
-SUPPORTED_STATUSES = frozenset(
-    {"queued", "running", "success", "partial", "blocked", "unavailable", "failed", "cancelled"}
-)
+SUPPORTED_STATUSES = frozenset({"success", "partial", "blocked", "unavailable", "failed", "cancelled"})
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 KNOWN_TOP_LEVEL = frozenset(
     {
@@ -134,7 +132,7 @@ def validate_envelope(payload: Mapping[str, Any]) -> dict[str, Any]:
         if not isinstance(extraction, Mapping):
             raise ContractError("extraction: expected an object or null")
         extraction_status = _required_string(extraction, "status")
-        if extraction_status not in SUPPORTED_STATUSES:
+        if extraction_status not in {"success", "partial"}:
             raise ContractError(f"extraction.status: unsupported value {extraction_status}")
         post_text = extraction.get("post_text")
         if post_text is not None and not isinstance(post_text, str):
