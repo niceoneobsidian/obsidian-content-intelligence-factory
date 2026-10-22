@@ -23,7 +23,7 @@ SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 KNOWN_TOP_LEVEL = frozenset(
     {
         "contract_version", "source_id", "submitted_url", "normalized_url", "capture_id",
-        "capture_status", "status_reason", "captured_at", "completed_at", "artifacts",
+        "capture_status", "status_reason", "error_code", "captured_at", "completed_at", "artifacts",
         "extraction", "platform", "producer_revision", "warnings",
     }
 )
@@ -208,6 +208,9 @@ def validate_envelope(payload: Mapping[str, Any]) -> dict[str, Any]:
     reason = payload.get("status_reason")
     if reason is not None and not isinstance(reason, str):
         raise ContractError("status_reason: expected string or null")
+    error_code = payload.get("error_code")
+    if error_code is not None and not isinstance(error_code, str):
+        raise ContractError("error_code: expected string or null")
     return {
         "contract_version": version,
         "source_id": source_id,
@@ -216,6 +219,7 @@ def validate_envelope(payload: Mapping[str, Any]) -> dict[str, Any]:
         "normalized_url": normalized_url,
         "capture_status": status,
         "status_reason": reason,
+        "error_code": error_code,
         "captured_at": captured_at,
         "completed_at": completed_at,
         "artifacts": list(artifact_by_id.values()),
@@ -244,6 +248,7 @@ class OCIFStore:
                 normalized_url TEXT NOT NULL,
                 capture_status TEXT NOT NULL,
                 status_reason TEXT,
+                error_code TEXT,
                 captured_at TEXT,
                 completed_at TEXT,
                 platform TEXT,
@@ -336,14 +341,14 @@ class OCIFStore:
         cursor = self.connection.execute(
             """INSERT INTO observations(
                 contract_version, source_id, capture_id, submitted_url, normalized_url,
-                capture_status, status_reason, captured_at, completed_at, platform,
+                capture_status, status_reason, error_code, captured_at, completed_at, platform,
                 producer_revision, extraction_json, artifacts_json, warnings_json,
                 payload_hash, ingested_at, ingest_latency_ms
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 envelope["contract_version"], envelope["source_id"], envelope["capture_id"],
                 envelope["submitted_url"], envelope["normalized_url"], envelope["capture_status"],
-                envelope["status_reason"], envelope["captured_at"], envelope["completed_at"],
+                envelope["status_reason"], envelope["error_code"], envelope["captured_at"], envelope["completed_at"],
                 envelope["platform"], envelope["producer_revision"],
                 _canonical_json(envelope["extraction"]) if envelope["extraction"] else None,
                 _canonical_json(envelope["artifacts"]), _canonical_json(envelope["warnings"]),
