@@ -1,0 +1,23 @@
+[
+  {
+    "query": "football strategy",
+    "expected_chunk_ids": [
+      "212ac5107aa9e2a35fe72a750acbd2f3b8820381851b311ced3b8a3d8167ed8a"
+    ],
+    "expected_capture_id": "capture-1"
+  },
+  {
+    "query": "audience attention",
+    "expected_chunk_ids": [
+      "212ac5107aa9e2a35fe72a750acbd2f3b8820381851b311ced3b8a3d8167ed8a"
+    ],
+    "expected_capture_id": "capture-1"
+  },
+  {
+    "query": "content performance",
+    "expected_chunk_ids": [
+      "212ac5107aa9e2a35fe72a750acbd2f3b8820381851b311ced3b8a3d8167ed8a"
+    ],
+    "expected_capture_id": "capture-1"
+  }
+]
