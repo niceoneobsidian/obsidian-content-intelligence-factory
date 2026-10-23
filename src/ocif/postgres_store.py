@@ -43,8 +43,9 @@ class PostgresOCIFStore:
     def __init__(self, dsn: str | None = None, *, connection_factory: Callable[[], Any] | None = None) -> None:
         if connection_factory is None and not (dsn and dsn.strip()):
             raise ValueError("PostgreSQL DSN or connection_factory is required")
-        self._connect = connection_factory
-        if self._connect is None:
+        if connection_factory is not None:
+            self._connect: Callable[[], Any] = connection_factory
+        else:
             def connect() -> Any:
                 try:
                     import psycopg
