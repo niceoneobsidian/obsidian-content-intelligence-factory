@@ -207,13 +207,20 @@ class ContentWorkflow:
                 "idempotency_key": idempotency_key, "mode": "sandbox_noop",
             }
             cur.execute(
-                "SELECT receipt_id,status,execution_json FROM ocif_execution_receipts WHERE idempotency_key=%s",
+                "SELECT receipt_id,status,execution_json,approval_id,draft_id,content_sha256 "
+                "FROM ocif_execution_receipts WHERE idempotency_key=%s",
                 (idempotency_key,),
             )
             existing = cur.fetchone()
             if existing is not None:
                 if existing[1] != "succeeded":
                     raise WorkflowError("previous execution with this idempotency key did not succeed")
+                if (
+                    str(existing[3]) != approval_id
+                    or str(existing[4]) != str(row[1])
+                    or str(existing[5]) != str(row[2])
+                ):
+                    raise WorkflowError("idempotency key was already used for a different approved draft")
                 return {"receipt_id": str(existing[0]), "status": str(existing[1]),
                         "execution": existing[2], "replayed": True}
             authorization = authorize(request)
