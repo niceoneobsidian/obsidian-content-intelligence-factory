@@ -1,14 +1,14 @@
 # USIE-to-OCIF Evidence Contract
 
 **Contract ID:** `ocif.usie-import`  
-**Version:** `0.1.0-draft`  
-**Status:** Candidate contract implemented in open PRs; not merged or stable
+**Version:** `0.1.0`  
+**Status:** Approved for internal cross-repository integration; stable API and production acceptance remain gated
 
 ## 1. Purpose
 
 Define the minimum information OCIF needs to import USIE collection/extraction outcomes without taking ownership of USIE's canonical data or losing provenance.
 
-This document is a proposed consumer contract. It does not assert that USIE currently exposes a JSON export endpoint, public SDK, or stable API. The implementation mechanism must be selected after inspecting the current USIE CLI, repository interfaces, schema and tests.
+This document is the accepted internal wire contract for the OCIF consumer and the USIE read-only export adapter. The implementation uses a producer-side Python adapter over USIE's canonical repository records; it is not a public HTTP endpoint or a stable external API. This approval authorizes implementation and cross-repository testing only; production acceptance remains subject to the release gates below.
 
 ## 2. Contract rules
 
@@ -23,7 +23,7 @@ This document is a proposed consumer contract. It does not assert that USIE curr
 
 ## 3. Required logical envelope
 
-The exact field names are proposed and require mapping to the actual USIE schema.
+The field names below are the agreed wire envelope. The USIE adapter maps them from canonical `captures`, `sources`, `artifacts`, and `extraction_results` records; producer and consumer tests must retain parity.
 
 | Field | Required | Meaning |
 |---|---:|---|
@@ -72,7 +72,7 @@ A platform label is routing metadata, not proof that content extraction is imple
 
 ## 6. Idempotency and updates
 
-- Suggested import key: `(source_id, capture_id, contract_version)`, subject to review.
+- Import key: `(source_id, capture_id, contract_version)`.
 - Reimporting the same key must not create duplicate knowledge observations.
 - A new `capture_id` must create a new observation and preserve prior lineage.
 - Corrections should be represented as versioned derived records or supersession links, not destructive edits to source evidence.
@@ -104,7 +104,24 @@ Both repositories must test fixtures for:
 - missing artifact, hash mismatch, malformed timestamp, unknown status and unknown contract version;
 - secrets/redaction and hostile prompt-like content in source text.
 
-## 9. Implementation sequence
+## 9. Internal contract decision
+
+**Decision:** Approved for internal implementation and integration testing as `ocif.usie-import` version `0.1.0`.
+
+**Scope:** The read-only USIE export adapter and OCIF consumer may implement this versioned envelope and test against shared fixtures. This does not claim that the adapter is merged, deployed, exposed as a public API, or production-certified.
+
+**Required before stable/production designation:**
+
+1. Producer and consumer fixture parity for every canonical terminal status, including malformed and unknown status cases.
+2. Real USIE SQLite capture + artifact directory export/import integration test.
+3. Artifact tamper, missing-file, unsafe-path and extraction-provenance mismatch rejection tests.
+4. PostgreSQL consumer replay after store/process recreation, idempotency conflict handling and quarantine verification.
+5. Fresh green required CI on final PR heads and reviewed changes in both repositories.
+6. OIS authorization denial and recovery test using the actual PostgreSQL OCIF consumer.
+
+**Ownership:** USIE remains authoritative for captures, extraction records and artifact bytes. OCIF remains authoritative for imported observations, quarantine, retrieval indexes and content workflow state. Neither system may infer support or success from the other system's platform label.
+
+## 10. Implementation sequence
 
 1. Agent 1 documents actual USIE schema, CLI and existing export options from source code and tests.
 2. Jointly map the proposed envelope to canonical fields and record differences.
