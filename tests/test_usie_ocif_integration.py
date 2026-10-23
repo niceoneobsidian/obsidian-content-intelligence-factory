@@ -170,4 +170,7 @@ def test_real_usie_capture_imports_to_postgres_and_replays_after_restart() -> No
                 extraction = json.loads(extraction)
             if isinstance(artifacts, str):
                 artifacts = json.loads(artifacts)
-            assert extraction["provenance"]["post_text"]["artifact_sha256"] == artifacts[0]["sha256"]
+            assert (
+                extraction["provenance"]["post_text"]["artifact_sha256"]
+                == artifacts[0]["sha256"]
+            )
