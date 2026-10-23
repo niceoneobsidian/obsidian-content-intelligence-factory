@@ -218,9 +218,10 @@ class ContentWorkflow:
         authorize: Callable[[Mapping[str, Any]], Mapping[str, Any]],
         execute_noop: Callable[[Mapping[str, Any]], Mapping[str, Any]] | None = None,
     ) -> dict[str, Any]:
-        """Require current human approval and OIS authorization before executor invocation."""
+        """Verify approval, call OIS outside the row-lock transaction, then persist a no-op receipt."""
         if not idempotency_key.strip():
             raise ValueError("idempotency_key is required")
+
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute(
                 """SELECT a.approval_id,a.draft_id,a.content_sha256,a.draft_version,a.reviewer_id,
@@ -239,10 +240,14 @@ class ContentWorkflow:
             ):
                 raise ApprovalStale("draft content changed after approval; approval is invalid")
             request = {
-                "action": "ocif.content.execute", "approval_id": str(row[0]),
-                "draft_id": str(row[1]), "content_sha256": str(row[2]),
-                "draft_version": int(row[3]), "reviewer_id": str(row[4]),
-                "idempotency_key": idempotency_key, "mode": "sandbox_noop",
+                "action": "ocif.content.execute",
+                "approval_id": str(row[0]),
+                "draft_id": str(row[1]),
+                "content_sha256": str(row[2]),
+                "draft_version": int(row[3]),
+                "reviewer_id": str(row[4]),
+                "idempotency_key": idempotency_key,
+                "mode": "sandbox_noop",
             }
             cur.execute(
                 "SELECT receipt_id,status,execution_json,approval_id,draft_id,content_sha256 "
@@ -252,39 +257,97 @@ class ContentWorkflow:
             existing = cur.fetchone()
             if existing is not None:
                 if existing[1] != "succeeded":
-                    raise WorkflowError(
-                        "previous execution with this idempotency key did not succeed"
-                    )
+                    raise WorkflowError("previous execution with this idempotency key did not succeed")
                 if (
                     str(existing[3]) != approval_id
                     or str(existing[4]) != str(row[1])
                     or str(existing[5]) != str(row[2])
                 ):
-                    raise WorkflowError(
-                        "idempotency key was already used for a different approved draft"
-                    )
-                return {"receipt_id": str(existing[0]), "status": str(existing[1]),
-                        "execution": existing[2], "replayed": True}
-            authorization = authorize(request)
-            if not isinstance(authorization, Mapping) or authorization.get("allowed") is not True:
-                raise AuthorizationDenied("OIS authorization denied the execution request")
-            if not authorization.get("invocation_id"):
-                raise AuthorizationDenied("OIS authorization response lacks invocation_id")
-            executor = execute_noop or (
-                lambda req: {"mode": req["mode"], "external_side_effects": False}
-            )
-            execution = executor(request)
-            receipt_id = str(uuid4())
+                    raise WorkflowError("idempotency key was already used for a different approved draft")
+                return {
+                    "receipt_id": str(existing[0]),
+                    "status": str(existing[1]),
+                    "execution": existing[2],
+                    "replayed": True,
+                }
+
+        # Never hold OCIF row locks while calling OIS; OIS independently verifies the live approval.
+        authorization = authorize(request)
+        if not isinstance(authorization, Mapping) or authorization.get("allowed") is not True:
+            raise AuthorizationDenied("OIS authorization denied the execution request")
+        if not authorization.get("invocation_id"):
+            raise AuthorizationDenied("OIS authorization response lacks invocation_id")
+
+        executor = execute_noop or (
+            lambda req: {"mode": req["mode"], "external_side_effects": False}
+        )
+        execution = executor(request)
+        if (
+            not isinstance(execution, Mapping)
+            or execution.get("mode") != "sandbox_noop"
+            or execution.get("external_side_effects") is not False
+        ):
+            raise WorkflowError("only a verified sandbox/no-op execution receipt is accepted")
+
+        receipt_id = str(uuid4())
+        with self._connect() as conn, conn.cursor() as cur:
             cur.execute(
-                "INSERT INTO ocif_execution_receipts(receipt_id,approval_id,draft_id,"
-                "content_sha256,"
+                """SELECT a.content_sha256,a.draft_version,a.decision,d.content,d.content_sha256,d.version
+                   FROM ocif_human_approvals a JOIN ocif_content_drafts d ON d.draft_id=a.draft_id
+                   WHERE a.approval_id=%s FOR UPDATE OF a,d""",
+                (approval_id,),
+            )
+            current = cur.fetchone()
+            if current is None or current[2] != "approved":
+                raise AuthorizationDenied("approval was revoked before receipt persistence")
+            if (
+                str(current[0]) != str(current[4])
+                or int(current[1]) != int(current[5])
+                or _digest(str(current[3])) != str(current[4])
+                or str(current[0]) != str(request["content_sha256"])
+                or int(current[1]) != int(request["draft_version"])
+            ):
+                raise ApprovalStale("draft changed while OIS authorization was being evaluated")
+            cur.execute(
+                "SELECT receipt_id,status,execution_json,approval_id,draft_id,content_sha256 "
+                "FROM ocif_execution_receipts WHERE idempotency_key=%s",
+                (idempotency_key,),
+            )
+            existing = cur.fetchone()
+            if existing is not None:
+                if (
+                    str(existing[3]) != approval_id
+                    or str(existing[4]) != str(request["draft_id"])
+                    or str(existing[5]) != str(request["content_sha256"])
+                    or existing[1] != "succeeded"
+                ):
+                    raise WorkflowError("idempotency key was concurrently used for another execution")
+                return {
+                    "receipt_id": str(existing[0]),
+                    "status": str(existing[1]),
+                    "execution": existing[2],
+                    "replayed": True,
+                }
+            cur.execute(
+                "INSERT INTO ocif_execution_receipts(receipt_id,approval_id,draft_id,content_sha256,"
                 "idempotency_key,status,authorization_json,execution_json) "
                 "VALUES (%s,%s,%s,%s,%s,'succeeded',%s::jsonb,%s::jsonb)",
-                (receipt_id, approval_id, str(row[1]), str(row[2]), idempotency_key,
-                 _json(dict(authorization)), _json(dict(execution))),
+                (
+                    receipt_id,
+                    approval_id,
+                    str(request["draft_id"]),
+                    str(request["content_sha256"]),
+                    idempotency_key,
+                    _json(dict(authorization)),
+                    _json(dict(execution)),
+                ),
             )
-            return {"receipt_id": receipt_id, "status": "succeeded",
-                    "execution": dict(execution), "replayed": False}
+        return {
+            "receipt_id": receipt_id,
+            "status": "succeeded",
+            "execution": dict(execution),
+            "replayed": False,
+        }
 
     def record_outcome(self, receipt_id: str, metrics: Mapping[str, Any], *, source: str) -> int:
         if not source.strip() or not metrics:
