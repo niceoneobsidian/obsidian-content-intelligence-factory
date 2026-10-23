@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import tempfile
 import uuid
 from pathlib import Path
@@ -10,6 +11,7 @@ from usie.db.repository import SqliteRepository
 from usie.integrations.ocif import export_capture
 
 from ocif.ingestion import OCIFStore
+from ocif.postgres_store import PostgresOCIFStore
 
 
 def _export_real_sqlite_capture(base: Path) -> dict:
@@ -129,3 +131,43 @@ def test_real_usie_export_is_consumed_with_provenance_and_safe_deduplication() -
             ).fetchone()[0] == 2
         finally:
             store.close()
+
+
+def test_real_usie_capture_imports_to_postgres_and_replays_after_restart() -> None:
+    import pytest
+
+    dsn = os.getenv("OCIF_TEST_POSTGRES_DSN")
+    if not dsn:
+        pytest.skip("PostgreSQL integration DSN not configured")
+    with tempfile.TemporaryDirectory() as directory:
+        envelope = _export_real_sqlite_capture(Path(directory))
+        first_store = PostgresOCIFStore(dsn)
+        first_store.initialize()
+        first = first_store.import_payload(envelope)
+        assert first.status == "accepted"
+        assert first.observation_id is not None
+
+        # A new store instance models process restart against the same durable database.
+        restarted = PostgresOCIFStore(dsn)
+        restarted.initialize()
+        replay = restarted.import_payload(envelope)
+        assert replay.status == "duplicate"
+        assert replay.observation_id == first.observation_id
+
+        changed = {**envelope, "warnings": ["post-export mutation"]}
+        assert restarted.import_payload(changed).status == "rejected"
+
+        with restarted._connect() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT extraction_json, artifacts_json FROM ocif_observations WHERE capture_id=%s",
+                (envelope["capture_id"],),
+            )
+            row = cursor.fetchone()
+            assert row is not None
+            extraction = row[0]
+            artifacts = row[1]
+            if isinstance(extraction, str):
+                extraction = json.loads(extraction)
+            if isinstance(artifacts, str):
+                artifacts = json.loads(artifacts)
+            assert extraction["provenance"]["post_text"]["artifact_sha256"] == artifacts[0]["sha256"]
