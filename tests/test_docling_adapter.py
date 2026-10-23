@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
 import pytest
+from jsonschema import Draft202012Validator, FormatChecker
 
 MODULE_PATH = Path(__file__).parents[1] / "tools" / "docling_adapter.py"
 SPEC = importlib.util.spec_from_file_location("docling_adapter", MODULE_PATH)
@@ -33,3 +35,26 @@ def test_rejects_empty_and_oversized_inputs(tmp_path: Path) -> None:
     digest = hashlib.sha256(pdf.read_bytes()).hexdigest()
     with pytest.raises(ValueError, match="document_size_limit_exceeded"):
         MODULE.extract_pdf(pdf, expected_sha256=digest, max_bytes=10)
+
+
+def test_adapter_result_matches_its_separate_schema() -> None:
+    result = MODULE.DocumentProcessingResult(
+        contract_version="0.1.0",
+        processor_id="docling",
+        processor_version="2.0.0",
+        artifact_sha256=hashlib.sha256(b"pdf").hexdigest(),
+        artifact_size_bytes=3,
+        media_type="application/pdf",
+        extraction_status="success",
+        markdown="persist this separately",
+        page_count=1,
+        warnings=(),
+    ).to_dict()
+    schema_path = (
+        Path(__file__).parents[1]
+        / "docs"
+        / "contracts"
+        / "docling-adapter-result.schema.json"
+    )
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    Draft202012Validator(schema, format_checker=FormatChecker()).validate(result)
