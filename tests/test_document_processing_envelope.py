@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from jsonschema import Draft202012Validator, FormatChecker
 
-from ocif.document_processing import build_envelope
+from ocif.document_processing import build_envelope, to_ois_input
 
 
 def adapter_result() -> dict:
@@ -47,6 +47,10 @@ def test_envelope_maps_lineage_and_excludes_markdown() -> None:
     assert envelope["artifact_sha256"] == result["artifact_sha256"]
     assert envelope["page_provenance"] == [{"page_number": 1}, {"page_number": 2}]
     assert envelope["output_refs"] == ["objects/sha256/abc.md"]
+    assert len(envelope["idempotency_key"]) == 64
+    ois_input = to_ois_input(envelope)
+    assert ois_input["capture_id"] == "capture-1"
+    assert ois_input["idempotency_key"] == envelope["idempotency_key"]
     assert "markdown" not in envelope
     assert "extracted text must not be copied into envelope" not in json.dumps(envelope)
 
@@ -71,3 +75,9 @@ def test_envelope_has_schema_required_fields() -> None:
     )
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
     Draft202012Validator(schema, format_checker=FormatChecker()).validate(envelope)
+
+
+def test_ois_input_requires_capture_lineage() -> None:
+    envelope = build_envelope(adapter_result(), **envelope_kwargs())
+    with pytest.raises(ValueError, match="missing_ois_capability_fields:capture_id"):
+        to_ois_input(envelope)
