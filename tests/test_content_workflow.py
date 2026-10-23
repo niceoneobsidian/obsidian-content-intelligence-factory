@@ -43,11 +43,12 @@ def test_content_workflow_requires_human_approval_and_ois_authorization() -> Non
         )
     assert called == []
 
-    authorized = lambda request: {
-        "allowed": True,
-        "invocation_id": f"ois-{request['idempotency_key']}",
-        "policy_version": "test-policy-v1",
-    }
+    def authorized(request):
+        return {
+            "allowed": True,
+            "invocation_id": f"ois-{request['idempotency_key']}",
+            "policy_version": "test-policy-v1",
+        }
     key = str(uuid4())
     result = workflow.execute_approved(
         approval_id, idempotency_key=key, authorize=authorized, execute_noop=executor
