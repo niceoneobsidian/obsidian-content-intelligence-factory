@@ -50,7 +50,7 @@ jobs:
           python -m pip install -e '.[dev,postgres]'
           python -m pip install -e ./usie
           # Exercise the actual OIS policy spine in the PostgreSQL vertical slice.
-          python -m pip install "niceone-obsidian @ git+https://github.com/niceoneobsidian/niceone-obsidian.git@docs/ocif-governed-execution-boundary"
+          python -m pip install "niceone-obsidian @ git+https://github.com/niceoneobsidian/niceone-obsidian.git@d60b3fd474917ee5f0bf46233ca58b4f56c0f40c"
       - name: Check lint
         run: python -m ruff check src tests
       - name: Run unit tests
