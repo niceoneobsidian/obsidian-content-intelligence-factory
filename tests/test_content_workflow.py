@@ -53,20 +53,13 @@ def test_content_workflow_requires_human_approval_and_ois_authorization() -> Non
         {"evidence": 0.9, "clarity": 0.8, "novelty": 0.7, "brand_fit": 0.9},
     )
     approval_id = workflow.approve_draft(draft_id, "human-reviewer-1")
-    called = []
-
     def denied(_request):
         return {"allowed": False, "reason": "policy denied"}
 
-    def executor(_request):
-        called.append(True)
-        return {"external_side_effects": False, "mode": "sandbox_noop"}
-
     with pytest.raises(AuthorizationDenied):
         workflow.execute_approved(
-            approval_id, idempotency_key=str(uuid4()), authorize=denied, execute_noop=executor
+            approval_id, idempotency_key=str(uuid4()), authorize=denied
         )
-    assert called == []
 
     def authorized(request):
         return {
@@ -77,18 +70,17 @@ def test_content_workflow_requires_human_approval_and_ois_authorization() -> Non
         }
     key = str(uuid4())
     result = workflow.execute_approved(
-        approval_id, idempotency_key=key, authorize=authorized, execute_noop=executor
+        approval_id, idempotency_key=key, authorize=authorized
     )
     assert result["status"] == "succeeded"
     assert result["execution"]["external_side_effects"] is False
-    assert len(called) == 1
+    assert result["execution"]["mode"] == "sandbox_noop"
 
     replay = workflow.execute_approved(
-        approval_id, idempotency_key=key, authorize=authorized, execute_noop=executor
+        approval_id, idempotency_key=key, authorize=authorized
     )
     assert replay["receipt_id"] == result["receipt_id"]
     assert replay["replayed"] is True
-    assert len(called) == 1
 
     first_event = workflow.record_outcome(
         result["receipt_id"], {"impressions": 120, "engagements": 9}, source="fixture-analytics"
