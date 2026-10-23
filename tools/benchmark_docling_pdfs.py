@@ -95,7 +95,7 @@ def main() -> int:
             safe_name = f"{record['input_sha256'][:16]}.md"
             markdown_path = output_dir / safe_name
             markdown_path.write_text(markdown, encoding="utf-8")
-            record["markdown_output_file"] = safe_name
+            record["markdown_output_file"] = f"{output_dir.name}/{safe_name}"
         rows.append(record)
 
     summary = {
