@@ -39,7 +39,12 @@ class PostgresOCIFStore:
         ON ocif_import_events(source_id, capture_id, occurred_at);
     """
 
-    def __init__(self, dsn: str | None = None, *, connection_factory: Callable[[], Any] | None = None) -> None:
+    def __init__(
+        self,
+        dsn: str | None = None,
+        *,
+        connection_factory: Callable[[], Any] | None = None,
+    ) -> None:
         if connection_factory is None and not (dsn and dsn.strip()):
             raise ValueError(
                 "PostgreSQL DSN or connection_factory is required"
@@ -118,8 +123,11 @@ class PostgresOCIFStore:
                    capture_status, status_reason, error_code, captured_at, completed_at, platform,
                    producer_revision, extraction_json, artifacts_json, warnings_json, payload_hash,
                    ingested_at, ingest_latency_ms)
-                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s::jsonb,%s,now(),%s)
-                   ON CONFLICT(source_id,capture_id,contract_version) DO NOTHING
+                   VALUES (
+                       %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                       %s::jsonb, %s::jsonb, %s::jsonb, %s, now(), %s
+                   )
+                   ON CONFLICT(source_id, capture_id, contract_version) DO NOTHING
                    RETURNING observation_id""",
                 (envelope["contract_version"], envelope["source_id"], envelope["capture_id"],
                  envelope["submitted_url"], envelope["normalized_url"], envelope["capture_status"],
