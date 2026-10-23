@@ -100,6 +100,14 @@ class ContentWorkflow:
         brief_id = str(uuid4())
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute(
+                "SELECT COUNT(DISTINCT capture_id) FROM ocif_observations "
+                "WHERE capture_id = ANY(%s)",
+                (list(dict.fromkeys(evidence_ids)),),
+            )
+            row = cur.fetchone()
+            if row is None or int(row[0]) != len(set(evidence_ids)):
+                raise WorkflowError("every evidence ID must reference an imported OCIF capture")
+            cur.execute(
                 "INSERT INTO ocif_research_briefs(brief_id,objective,evidence_ids,body) "
                 "VALUES (%s,%s,%s::jsonb,%s)",
                 (brief_id, objective.strip(), _json(list(dict.fromkeys(evidence_ids))),
