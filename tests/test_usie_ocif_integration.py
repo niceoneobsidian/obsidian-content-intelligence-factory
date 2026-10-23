@@ -214,14 +214,17 @@ def test_real_usie_evidence_completes_postgres_content_workflow_vertical_slice()
         )
         approval_id = workflow.approve_draft(draft_id, "human-reviewer")
         from ois.integration.durable_runtime import build_durable_ois_runtime
+        import psycopg
         from ois.integration.ocif_content_execution import (
             OCIFContentExecutionCapability,
+            PostgresOCIFApprovalVerifier,
             authorize_ocif_content_request,
         )
         from ois.registries import CapabilityRegistry
 
         registry = CapabilityRegistry()
-        registry.register(OCIFContentExecutionCapability())
+        verifier = PostgresOCIFApprovalVerifier(lambda: psycopg.connect(dsn))
+        registry.register(OCIFContentExecutionCapability(verifier))
         tenant_id = str(uuid.uuid4())
         ois_runtime = build_durable_ois_runtime(
             registry,
