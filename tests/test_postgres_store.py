@@ -8,7 +8,10 @@ import pytest
 from ocif.postgres_store import PostgresOCIFStore
 
 
-@pytest.mark.skipif(not os.getenv("OCIF_TEST_POSTGRES_DSN"), reason="PostgreSQL integration DSN not configured")
+@pytest.mark.skipif(
+    not os.getenv("OCIF_TEST_POSTGRES_DSN"),
+    reason="PostgreSQL integration DSN not configured",
+)
 def test_postgres_consumer_replay_survives_store_recreation() -> None:
     dsn = os.environ["OCIF_TEST_POSTGRES_DSN"]
     source_id, capture_id = str(uuid4()), str(uuid4())
