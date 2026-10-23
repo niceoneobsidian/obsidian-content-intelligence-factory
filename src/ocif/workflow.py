@@ -218,7 +218,7 @@ class ContentWorkflow:
         authorize: Callable[[Mapping[str, Any]], Mapping[str, Any]],
         execute_noop: Callable[[Mapping[str, Any]], Mapping[str, Any]] | None = None,
     ) -> dict[str, Any]:
-        """Verify approval, call OIS outside the row-lock transaction, then persist a no-op receipt."""
+        """Verify approval, call OIS outside the row-lock transaction, and persist a no-op receipt."""
         if not idempotency_key.strip():
             raise ValueError("idempotency_key is required")
 
@@ -257,13 +257,17 @@ class ContentWorkflow:
             existing = cur.fetchone()
             if existing is not None:
                 if existing[1] != "succeeded":
-                    raise WorkflowError("previous execution with this idempotency key did not succeed")
+                    raise WorkflowError(
+                        "previous execution with this idempotency key did not succeed"
+                    )
                 if (
                     str(existing[3]) != approval_id
                     or str(existing[4]) != str(row[1])
                     or str(existing[5]) != str(row[2])
                 ):
-                    raise WorkflowError("idempotency key was already used for a different approved draft")
+                    raise WorkflowError(
+                        "idempotency key was already used for a different approved draft"
+                    )
                 return {
                     "receipt_id": str(existing[0]),
                     "status": str(existing[1]),
@@ -304,7 +308,8 @@ class ContentWorkflow:
         receipt_id = str(uuid4())
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute(
-                """SELECT a.content_sha256,a.draft_version,a.decision,d.content,d.content_sha256,d.version
+                """SELECT a.content_sha256,a.draft_version,a.decision,d.content,
+                          d.content_sha256,d.version
                    FROM ocif_human_approvals a JOIN ocif_content_drafts d ON d.draft_id=a.draft_id
                    WHERE a.approval_id=%s FOR UPDATE OF a,d""",
                 (approval_id,),
@@ -333,7 +338,9 @@ class ContentWorkflow:
                     or str(existing[5]) != str(request["content_sha256"])
                     or existing[1] != "succeeded"
                 ):
-                    raise WorkflowError("idempotency key was concurrently used for another execution")
+                    raise WorkflowError(
+                        "idempotency key was concurrently used for another execution"
+                    )
                 return {
                     "receipt_id": str(existing[0]),
                     "status": str(existing[1]),
@@ -341,7 +348,8 @@ class ContentWorkflow:
                     "replayed": True,
                 }
             cur.execute(
-                "INSERT INTO ocif_execution_receipts(receipt_id,approval_id,draft_id,content_sha256,"
+                "INSERT INTO ocif_execution_receipts(receipt_id,approval_id,draft_id,"
+                "content_sha256,"
                 "idempotency_key,status,authorization_json,execution_json) "
                 "VALUES (%s,%s,%s,%s,%s,'succeeded',%s::jsonb,%s::jsonb)",
                 (
