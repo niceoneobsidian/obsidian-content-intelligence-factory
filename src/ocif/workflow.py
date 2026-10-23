@@ -277,6 +277,18 @@ class ContentWorkflow:
             raise AuthorizationDenied("OIS authorization denied the execution request")
         if not authorization.get("invocation_id"):
             raise AuthorizationDenied("OIS authorization response lacks invocation_id")
+        for key in (
+            "approval_id",
+            "draft_id",
+            "content_sha256",
+            "draft_version",
+            "idempotency_key",
+            "mode",
+        ):
+            if authorization.get(key) != request[key]:
+                raise AuthorizationDenied(
+                    f"OIS authorization response is not bound to the requested {key}"
+                )
 
         executor = execute_noop or (
             lambda req: {"mode": req["mode"], "external_side_effects": False}
