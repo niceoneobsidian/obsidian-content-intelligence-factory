@@ -1,8 +1,9 @@
 """Map a Docling adapter result into the versioned OCIF provenance envelope."""
 from __future__ import annotations
 
-import re
 from uuid import uuid4
+
+import re
 
 
 _SHA256 = re.compile(r"^[a-fA-F0-9]{64}$")
