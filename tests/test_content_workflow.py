@@ -70,6 +70,7 @@ def test_content_workflow_requires_human_approval_and_ois_authorization() -> Non
 
     def authorized(request):
         return {
+            **request,
             "allowed": True,
             "invocation_id": f"ois-{request['idempotency_key']}",
             "policy_version": "test-policy-v1",
