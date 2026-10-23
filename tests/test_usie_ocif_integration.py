@@ -6,9 +6,10 @@ import tempfile
 import uuid
 from pathlib import Path
 
-from ocif.ingestion import OCIFStore
 from usie.db.repository import SqliteRepository
 from usie.integrations.ocif import export_capture
+
+from ocif.ingestion import OCIFStore
 
 
 def _export_real_sqlite_capture(base: Path) -> dict:
