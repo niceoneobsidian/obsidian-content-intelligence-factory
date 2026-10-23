@@ -17,6 +17,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+      - name: Checkout pinned USIE producer for cross-repository contract tests
+        uses: actions/checkout@v4
+        with:
+          repository: niceoneobsidian/universal-social-intelligence
+          ref: 557c1e630aa3350489e675b66c1bcf5f1c72b76b
+          path: usie
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -26,6 +32,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e '.[dev]'
+          python -m pip install -e ./usie
       - name: Check lint
         run: python -m ruff check src tests
       - name: Run unit tests
