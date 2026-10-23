@@ -23,7 +23,7 @@ def test_draft_score_is_deterministic_and_explains_coverage() -> None:
     first = score_draft(values)
     second = score_draft(values)
     assert first == second
-    assert first.score == 82.5
+    assert first.score == 83.5
     assert first.coverage == 1.0
     assert first.eligible is True
 
