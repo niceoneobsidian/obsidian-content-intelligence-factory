@@ -13,7 +13,7 @@ jobs:
   validate:
     name: Python 3.12 — lint and tests
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:16
@@ -49,6 +49,8 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e '.[dev,postgres]'
           python -m pip install -e ./usie
+          # Exercise the actual OIS policy spine in the PostgreSQL vertical slice.
+          python -m pip install "niceone-obsidian @ git+https://github.com/niceoneobsidian/niceone-obsidian.git@docs/ocif-governed-execution-boundary"
       - name: Check lint
         run: python -m ruff check src tests
       - name: Run unit tests
