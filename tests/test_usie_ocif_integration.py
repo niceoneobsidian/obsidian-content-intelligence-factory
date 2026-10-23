@@ -93,6 +93,13 @@ def test_real_usie_export_is_consumed_with_provenance_and_safe_deduplication() -
             assert duplicate.status == "duplicate"
             assert first.observation_id == duplicate.observation_id
 
+            # Reopen the real consumer database to simulate a process restart.
+            store.close()
+            store = OCIFStore(str(Path(directory) / "ocif.sqlite3"))
+            replay_after_restart = store.import_payload(envelope)
+            assert replay_after_restart.status == "duplicate"
+            assert replay_after_restart.observation_id == first.observation_id
+
             row = store.connection.execute(
                 "SELECT extraction_json, artifacts_json FROM observations "
                 "WHERE capture_id = ?",
