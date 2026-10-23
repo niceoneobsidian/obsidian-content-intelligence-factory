@@ -1,9 +1,9 @@
 """Map a Docling adapter result into the versioned OCIF provenance envelope."""
 from __future__ import annotations
 
-from uuid import uuid4
-
+import hashlib
 import re
+from uuid import uuid4
 
 
 _SHA256 = re.compile(r"^[a-fA-F0-9]{64}$")
@@ -30,7 +30,8 @@ def build_envelope(
     """
     if not document_id or not source_id or not artifact_id:
         raise ValueError("document_id_source_id_and_artifact_id_required")
-    if not _SHA256.fullmatch(str(result.get("artifact_sha256", ""))):
+    artifact_hash = str(result.get("artifact_sha256", ""))
+    if not _SHA256.fullmatch(artifact_hash):
         raise ValueError("invalid_artifact_sha256")
     if not _SHA256.fullmatch(options_digest):
         raise ValueError("invalid_options_digest")
@@ -48,19 +49,26 @@ def build_envelope(
     page_count = result.get("page_count")
     if page_count is not None and (not isinstance(page_count, int) or page_count < 0):
         raise ValueError("invalid_page_count")
+    processor_id = str(result["processor_id"])
+    processor_version = str(result["processor_version"])
+    stable_key = ":".join(
+        (artifact_hash.lower(), processor_id, processor_version, "0.1.0", options_digest.lower())
+    )
+    idempotency_key = hashlib.sha256(stable_key.encode("utf-8")).hexdigest()
     return {
         "contract_version": "0.1.0",
         "document_id": document_id,
         "source_id": source_id,
         "capture_id": capture_id,
         "artifact_id": artifact_id,
-        "artifact_sha256": result["artifact_sha256"].lower(),
+        "artifact_sha256": artifact_hash.lower(),
         "artifact_size_bytes": int(result["artifact_size_bytes"]),
         "media_type": result.get("media_type", "application/pdf"),
-        "processor_id": result["processor_id"],
-        "processor_version": result["processor_version"],
-        "options_digest": options_digest,
+        "processor_id": processor_id,
+        "processor_version": processor_version,
+        "options_digest": options_digest.lower(),
         "extraction_run_id": extraction_run_id or str(uuid4()),
+        "idempotency_key": idempotency_key,
         "extraction_status": status,
         "started_at": started_at,
         "completed_at": completed_at,
@@ -73,3 +81,21 @@ def build_envelope(
         "error_code": result.get("error_code"),
         "producer_revision": producer_revision,
     }
+
+
+def to_ois_input(envelope: dict) -> dict:
+    """Map the provenance envelope to the least-privilege OIS capability input."""
+    required = (
+        "source_id",
+        "capture_id",
+        "artifact_id",
+        "artifact_sha256",
+        "artifact_size_bytes",
+        "media_type",
+        "options_digest",
+        "idempotency_key",
+    )
+    missing = [field for field in required if envelope.get(field) in (None, "")]
+    if missing:
+        raise ValueError("missing_ois_capability_fields:" + ",".join(missing))
+    return {field: envelope[field] for field in required}
