@@ -73,7 +73,7 @@ def test_content_workflow_requires_human_approval_and_ois_authorization() -> Non
             **request,
             "allowed": True,
             "invocation_id": f"ois-{request['idempotency_key']}",
-            "policy_version": "test-policy-v1",
+            "capability_version": "1.0.0",
         }
     key = str(uuid4())
     result = workflow.execute_approved(
