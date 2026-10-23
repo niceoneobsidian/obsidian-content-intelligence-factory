@@ -218,7 +218,7 @@ class ContentWorkflow:
         authorize: Callable[[Mapping[str, Any]], Mapping[str, Any]],
         execute_noop: Callable[[Mapping[str, Any]], Mapping[str, Any]] | None = None,
     ) -> dict[str, Any]:
-        """Verify approval, call OIS outside the row-lock transaction, and persist a no-op receipt."""
+        """Verify approval, call OIS outside row locks, and persist a no-op receipt."""
         if not idempotency_key.strip():
             raise ValueError("idempotency_key is required")
 
