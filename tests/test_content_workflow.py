@@ -5,6 +5,7 @@ from uuid import uuid4
 
 import pytest
 
+from ocif.postgres_store import PostgresOCIFStore
 from ocif.workflow import (
     ApprovalStale,
     AuthorizationDenied,
@@ -12,14 +13,38 @@ from ocif.workflow import (
 )
 
 
+def seed_capture(dsn: str) -> str:
+    source_id, capture_id = str(uuid4()), str(uuid4())
+    store = PostgresOCIFStore(dsn)
+    store.initialize()
+    result = store.import_payload({
+        "contract_version": "0.1.0",
+        "source_id": source_id,
+        "capture_id": capture_id,
+        "submitted_url": "https://example.org/research",
+        "normalized_url": "https://example.org/research",
+        "capture_status": "partial",
+        "captured_at": "2026-10-22T10:00:00+00:00",
+        "completed_at": "2026-10-22T10:00:01+00:00",
+        "artifacts": [],
+        "extraction": None,
+        "producer_revision": "workflow-test",
+        "warnings": [],
+    })
+    assert result.status == "accepted"
+    return capture_id
+
+
 @pytest.mark.skipif(not os.getenv("OCIF_TEST_POSTGRES_DSN"), reason="PostgreSQL DSN not configured")
 def test_content_workflow_requires_human_approval_and_ois_authorization() -> None:
-    workflow = ContentWorkflow(os.environ["OCIF_TEST_POSTGRES_DSN"])
+    dsn = os.environ["OCIF_TEST_POSTGRES_DSN"]
+    capture_ids = [seed_capture(dsn), seed_capture(dsn)]
+    workflow = ContentWorkflow(dsn)
     workflow.initialize()
     objective = f"Measure topic response {uuid4()}"
     brief_id = workflow.create_research_brief(
         objective,
-        ["evidence-usie-capture-1", "evidence-usie-capture-2"],
+        capture_ids,
         "Evidence-backed brief: the selected topic is gaining discussion across captured sources.",
     )
     draft_id = workflow.create_draft(
@@ -75,11 +100,13 @@ def test_content_workflow_requires_human_approval_and_ois_authorization() -> Non
 
 @pytest.mark.skipif(not os.getenv("OCIF_TEST_POSTGRES_DSN"), reason="PostgreSQL DSN not configured")
 def test_content_edit_invalidates_existing_approval() -> None:
-    workflow = ContentWorkflow(os.environ["OCIF_TEST_POSTGRES_DSN"])
+    dsn = os.environ["OCIF_TEST_POSTGRES_DSN"]
+    capture_id = seed_capture(dsn)
+    workflow = ContentWorkflow(dsn)
     workflow.initialize()
     brief_id = workflow.create_research_brief(
         f"Approval invalidation {uuid4()}",
-        ["evidence-capture-1"],
+        [capture_id],
         "Brief tied to one capture.",
     )
     draft_id = workflow.create_draft(brief_id, "Version one", {"clarity": 0.8})
