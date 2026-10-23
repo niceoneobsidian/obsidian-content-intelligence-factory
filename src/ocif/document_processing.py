@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import re
-from uuid import uuid4
+import uuid
 
 
 _SHA256 = re.compile(r"^[a-fA-F0-9]{64}$")
@@ -71,7 +71,7 @@ def build_envelope(
         "processor_id": processor_id,
         "processor_version": processor_version,
         "options_digest": options_digest.lower(),
-        "extraction_run_id": extraction_run_id or str(uuid4()),
+        "extraction_run_id": extraction_run_id or str(uuid.uuid4()),
         "idempotency_key": idempotency_key,
         "extraction_status": status,
         "started_at": started_at,
