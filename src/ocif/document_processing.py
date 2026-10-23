@@ -46,6 +46,10 @@ def build_envelope(
     status = result.get("extraction_status")
     if status not in {"success", "partial", "unsupported", "failed", "quarantined"}:
         raise ValueError("invalid_extraction_status")
+    if status in {"success", "partial"} and not output_refs:
+        raise ValueError("output_refs_required_for_usable_result")
+    if status in {"unsupported", "failed", "quarantined"} and output_refs:
+        raise ValueError("output_refs_forbidden_without_usable_result")
     page_count = result.get("page_count")
     if page_count is not None and (not isinstance(page_count, int) or page_count < 0):
         raise ValueError("invalid_page_count")
