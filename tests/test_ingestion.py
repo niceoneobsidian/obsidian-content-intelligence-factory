@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import pathlib
 import tempfile
 import unittest
@@ -143,6 +144,29 @@ class IngestionTests(unittest.TestCase):
         metrics = retrieval.evaluate_retrieval(self.store, "football strategy", [chunk_id], top_k=3)
         self.assertEqual(metrics["recall_at_k"], 1.0)
         self.assertEqual(metrics["mrr"], 1.0)
+
+    def test_golden_queries_record_retrieval_metrics_and_evidence_links(self) -> None:
+        self.store.import_payload(payload())
+        retrieval.build_index(self.store)
+        golden_path = pathlib.Path(__file__).parent / "fixtures" / "retrieval_golden_queries.json"
+        cases = json.loads(golden_path.read_text(encoding="utf-8"))
+        self.assertGreaterEqual(len(cases), 3)
+        for case in cases:
+            results = retrieval.retrieve(self.store, case["query"], top_k=1)
+            self.assertTrue(results, case["query"])
+            self.assertEqual(results[0].chunk_id, case["expected_chunk_ids"][0])
+            self.assertEqual(results[0].capture_id, case["expected_capture_id"])
+            self.assertTrue(results[0].artifacts)
+            self.assertEqual(results[0].artifacts[0]["artifact_hash_verified"], "True")
+            metrics = retrieval.evaluate_retrieval(
+                self.store,
+                case["query"],
+                case["expected_chunk_ids"],
+                top_k=1,
+            )
+            self.assertEqual(metrics["recall_at_k"], 1.0)
+            self.assertEqual(metrics["mrr"], 1.0)
+            self.assertEqual(metrics["precision_at_k"], 1.0)
 
     def test_reliability_metrics_are_computed_from_stored_events(self) -> None:
         self.store.import_payload(payload())
