@@ -222,16 +222,17 @@ def test_real_usie_evidence_completes_postgres_content_workflow_vertical_slice()
 
         registry = CapabilityRegistry()
         registry.register(OCIFContentExecutionCapability())
+        tenant_id = str(uuid.uuid4())
         ois_runtime = build_durable_ois_runtime(
             registry,
             postgres_dsn=dsn,
-            tenant_id="tenant-test",
+            tenant_id=tenant_id,
             allowed_permissions=("ocif.content.execute",),
         )
 
         def authorize(request):
             return authorize_ocif_content_request(
-                ois_runtime.spine, request, tenant_id="tenant-test"
+                ois_runtime.spine, request, tenant_id=tenant_id
             )
 
         try:
