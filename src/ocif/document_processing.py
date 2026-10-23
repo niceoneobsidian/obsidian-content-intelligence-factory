@@ -1,10 +1,6 @@
 """Map a Docling adapter result into the versioned OCIF provenance envelope."""
 import hashlib
-import re
 import uuid
-
-
-_SHA256 = re.compile(r"^[a-fA-F0-9]{64}$")
 
 
 def build_envelope(
@@ -29,9 +25,13 @@ def build_envelope(
     if not document_id or not source_id or not artifact_id:
         raise ValueError("document_id_source_id_and_artifact_id_required")
     artifact_hash = str(result.get("artifact_sha256", ""))
-    if not _SHA256.fullmatch(artifact_hash):
+    if len(artifact_hash) != 64 or any(
+        char not in "0123456789abcdefABCDEF" for char in artifact_hash
+    ):
         raise ValueError("invalid_artifact_sha256")
-    if not _SHA256.fullmatch(options_digest):
+    if len(options_digest) != 64 or any(
+        char not in "0123456789abcdefABCDEF" for char in options_digest
+    ):
         raise ValueError("invalid_options_digest")
     if int(result.get("artifact_size_bytes", 0)) < 1:
         raise ValueError("invalid_artifact_size")
