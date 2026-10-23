@@ -60,19 +60,23 @@ class ContentWorkflow:
       approved_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
     CREATE TABLE IF NOT EXISTS ocif_execution_receipts (
-      receipt_id TEXT PRIMARY KEY, approval_id TEXT NOT NULL REFERENCES ocif_human_approvals(approval_id),
+      receipt_id TEXT PRIMARY KEY,
+      approval_id TEXT NOT NULL REFERENCES ocif_human_approvals(approval_id),
       draft_id TEXT NOT NULL REFERENCES ocif_content_drafts(draft_id), content_sha256 TEXT NOT NULL,
       idempotency_key TEXT NOT NULL UNIQUE, status TEXT NOT NULL,
       authorization_json JSONB NOT NULL, execution_json JSONB NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
     CREATE TABLE IF NOT EXISTS ocif_outcome_events (
-      event_id BIGSERIAL PRIMARY KEY, receipt_id TEXT NOT NULL REFERENCES ocif_execution_receipts(receipt_id),
-      metrics_json JSONB NOT NULL, source TEXT NOT NULL, recorded_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      event_id BIGSERIAL PRIMARY KEY,
+      receipt_id TEXT NOT NULL REFERENCES ocif_execution_receipts(receipt_id),
+      metrics_json JSONB NOT NULL, source TEXT NOT NULL,
+      recorded_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
     CREATE INDEX IF NOT EXISTS idx_ocif_briefs_created ON ocif_research_briefs(created_at);
     CREATE INDEX IF NOT EXISTS idx_ocif_drafts_brief ON ocif_content_drafts(brief_id);
-    CREATE INDEX IF NOT EXISTS idx_ocif_outcomes_receipt ON ocif_outcome_events(receipt_id, recorded_at);
+    CREATE INDEX IF NOT EXISTS idx_ocif_outcomes_receipt
+      ON ocif_outcome_events(receipt_id, recorded_at);
     """
 
     def __init__(self, dsn: str) -> None:
@@ -98,7 +102,8 @@ class ContentWorkflow:
             cur.execute(
                 "INSERT INTO ocif_research_briefs(brief_id,objective,evidence_ids,body) "
                 "VALUES (%s,%s,%s::jsonb,%s)",
-                (brief_id, objective.strip(), _json(list(dict.fromkeys(evidence_ids))), body.strip()),
+                (brief_id, objective.strip(), _json(list(dict.fromkeys(evidence_ids))),
+                 body.strip()),
             )
         return brief_id
 
@@ -135,7 +140,8 @@ class ContentWorkflow:
                 "INSERT INTO ocif_content_drafts(draft_id,brief_id,content,content_sha256,score,"
                 "score_formula_version,score_breakdown,version) "
                 "VALUES (%s,%s,%s,%s,%s,%s,%s::jsonb,1)",
-                (draft_id, brief_id, content, _digest(content), score, formula_version, _json(breakdown)),
+                (draft_id, brief_id, content, _digest(content), score, formula_version,
+                 _json(breakdown)),
             )
         return draft_id
 
@@ -147,7 +153,10 @@ class ContentWorkflow:
             raise ValueError("draft content is required")
         score, breakdown = self.score_draft(dimensions, formula_version=formula_version)
         with self._connect() as conn, conn.cursor() as cur:
-            cur.execute("SELECT version FROM ocif_content_drafts WHERE draft_id=%s FOR UPDATE", (draft_id,))
+            cur.execute(
+                "SELECT version FROM ocif_content_drafts WHERE draft_id=%s FOR UPDATE",
+                (draft_id,),
+            )
             row = cur.fetchone()
             if row is None:
                 raise WorkflowError("draft does not exist")
@@ -156,7 +165,8 @@ class ContentWorkflow:
                 "UPDATE ocif_content_drafts SET content=%s,content_sha256=%s,score=%s,"
                 "score_formula_version=%s,score_breakdown=%s::jsonb,version=%s,updated_at=now() "
                 "WHERE draft_id=%s",
-                (content, _digest(content), score, formula_version, _json(breakdown), version, draft_id),
+                (content, _digest(content), score, formula_version, _json(breakdown),
+                 version, draft_id),
             )
         return version
 
@@ -173,7 +183,8 @@ class ContentWorkflow:
             if row is None:
                 raise WorkflowError("draft does not exist")
             cur.execute(
-                "INSERT INTO ocif_human_approvals(approval_id,draft_id,content_sha256,draft_version,"
+                "INSERT INTO ocif_human_approvals(approval_id,draft_id,content_sha256,"
+                "draft_version,"
                 "reviewer_id,decision) VALUES (%s,%s,%s,%s,%s,%s)",
                 (approval_id, draft_id, str(row[0]), int(row[1]), reviewer_id.strip(), decision),
             )
@@ -198,7 +209,11 @@ class ContentWorkflow:
             row = cur.fetchone()
             if row is None or row[5] != "approved":
                 raise AuthorizationDenied("no approved human decision found")
-            if str(row[2]) != str(row[7]) or int(row[3]) != int(row[8]) or _digest(str(row[6])) != str(row[7]):
+            if (
+                str(row[2]) != str(row[7])
+                or int(row[3]) != int(row[8])
+                or _digest(str(row[6])) != str(row[7])
+            ):
                 raise ApprovalStale("draft content changed after approval; approval is invalid")
             request = {
                 "action": "ocif.content.execute", "approval_id": str(row[0]),
@@ -214,13 +229,17 @@ class ContentWorkflow:
             existing = cur.fetchone()
             if existing is not None:
                 if existing[1] != "succeeded":
-                    raise WorkflowError("previous execution with this idempotency key did not succeed")
+                    raise WorkflowError(
+                        "previous execution with this idempotency key did not succeed"
+                    )
                 if (
                     str(existing[3]) != approval_id
                     or str(existing[4]) != str(row[1])
                     or str(existing[5]) != str(row[2])
                 ):
-                    raise WorkflowError("idempotency key was already used for a different approved draft")
+                    raise WorkflowError(
+                        "idempotency key was already used for a different approved draft"
+                    )
                 return {"receipt_id": str(existing[0]), "status": str(existing[1]),
                         "execution": existing[2], "replayed": True}
             authorization = authorize(request)
@@ -228,11 +247,14 @@ class ContentWorkflow:
                 raise AuthorizationDenied("OIS authorization denied the execution request")
             if not authorization.get("invocation_id"):
                 raise AuthorizationDenied("OIS authorization response lacks invocation_id")
-            executor = execute_noop or (lambda req: {"mode": req["mode"], "external_side_effects": False})
+            executor = execute_noop or (
+                lambda req: {"mode": req["mode"], "external_side_effects": False}
+            )
             execution = executor(request)
             receipt_id = str(uuid4())
             cur.execute(
-                "INSERT INTO ocif_execution_receipts(receipt_id,approval_id,draft_id,content_sha256,"
+                "INSERT INTO ocif_execution_receipts(receipt_id,approval_id,draft_id,"
+                "content_sha256,"
                 "idempotency_key,status,authorization_json,execution_json) "
                 "VALUES (%s,%s,%s,%s,%s,'succeeded',%s::jsonb,%s::jsonb)",
                 (receipt_id, approval_id, str(row[1]), str(row[2]), idempotency_key,
