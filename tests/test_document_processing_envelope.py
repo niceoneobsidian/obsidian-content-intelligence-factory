@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 import pytest
+from jsonschema import Draft202012Validator, FormatChecker
 
 from ocif.document_processing import build_envelope
 
@@ -69,5 +70,4 @@ def test_envelope_has_schema_required_fields() -> None:
         / "document-processing-envelope.schema.json"
     )
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
-    assert set(schema["required"]).issubset(envelope)
-    assert set(envelope).issubset(schema["properties"])
+    Draft202012Validator(schema, format_checker=FormatChecker()).validate(envelope)
