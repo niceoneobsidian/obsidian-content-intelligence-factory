@@ -6,9 +6,9 @@ uses psycopg lazily so the standard-library-only local consumer remains usable.
 from __future__ import annotations
 
 import hashlib
-from pathlib import Path, PurePosixPath
 from collections.abc import Callable, Mapping
 from datetime import datetime
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from .ingestion import ContractError, ImportResult, _canonical_json, _digest, validate_envelope
