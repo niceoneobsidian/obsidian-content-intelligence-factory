@@ -176,7 +176,8 @@ class ContentWorkflow:
         approval_id = str(uuid4())
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute(
-                "SELECT content_sha256,version FROM ocif_content_drafts WHERE draft_id=%s FOR UPDATE",
+                "SELECT content_sha256,version FROM ocif_content_drafts "
+                "WHERE draft_id=%s FOR UPDATE",
                 (draft_id,),
             )
             row = cur.fetchone()
