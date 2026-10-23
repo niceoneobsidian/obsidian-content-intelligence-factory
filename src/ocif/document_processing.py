@@ -1,6 +1,4 @@
 """Map a Docling adapter result into the versioned OCIF provenance envelope."""
-from __future__ import annotations
-
 import hashlib
 import re
 import uuid
