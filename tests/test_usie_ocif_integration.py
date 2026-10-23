@@ -140,6 +140,15 @@ def test_real_usie_capture_imports_to_postgres_and_replays_after_restart() -> No
     dsn = os.getenv("OCIF_TEST_POSTGRES_DSN")
     if not dsn:
         pytest.skip("PostgreSQL integration DSN not configured")
+    import psycopg
+    from ois.integration.durable_runtime import build_durable_ois_runtime
+    from ois.integration.ocif_content_execution import (
+        OCIFContentExecutionCapability,
+        PostgresOCIFApprovalVerifier,
+        authorize_ocif_content_request,
+    )
+    from ois.registries import CapabilityRegistry
+
     with tempfile.TemporaryDirectory() as directory:
         envelope = _export_real_sqlite_capture(Path(directory))
         first_store = PostgresOCIFStore(dsn, artifact_root=Path(directory) / "evidence")
@@ -213,14 +222,6 @@ def test_real_usie_evidence_completes_postgres_content_workflow_vertical_slice()
             {"evidence": 1.0, "clarity": 0.9, "novelty": 0.7, "brand_fit": 0.8},
         )
         approval_id = workflow.approve_draft(draft_id, "human-reviewer")
-        from ois.integration.durable_runtime import build_durable_ois_runtime
-        import psycopg
-        from ois.integration.ocif_content_execution import (
-            OCIFContentExecutionCapability,
-            PostgresOCIFApprovalVerifier,
-            authorize_ocif_content_request,
-        )
-        from ois.registries import CapabilityRegistry
 
         registry = CapabilityRegistry()
         verifier = PostgresOCIFApprovalVerifier(lambda: psycopg.connect(dsn))
