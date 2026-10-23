@@ -12,6 +12,7 @@ from usie.integrations.ocif import export_capture
 
 from ocif.ingestion import OCIFStore
 from ocif.postgres_store import PostgresOCIFStore
+from ocif.workflow import ContentWorkflow
 
 
 def _export_real_sqlite_capture(base: Path) -> dict:
@@ -141,18 +142,24 @@ def test_real_usie_capture_imports_to_postgres_and_replays_after_restart() -> No
         pytest.skip("PostgreSQL integration DSN not configured")
     with tempfile.TemporaryDirectory() as directory:
         envelope = _export_real_sqlite_capture(Path(directory))
-        first_store = PostgresOCIFStore(dsn)
+        first_store = PostgresOCIFStore(dsn, artifact_root=Path(directory) / "evidence")
         first_store.initialize()
         first = first_store.import_payload(envelope)
         assert first.status == "accepted"
         assert first.observation_id is not None
 
         # A new store instance models process restart against the same durable database.
-        restarted = PostgresOCIFStore(dsn)
+        restarted = PostgresOCIFStore(dsn, artifact_root=Path(directory) / "evidence")
         restarted.initialize()
         replay = restarted.import_payload(envelope)
         assert replay.status == "duplicate"
         assert replay.observation_id == first.observation_id
+
+        artifact_path = Path(directory) / "evidence" / "page.html"
+        artifact_path.write_bytes(b"tampered artifact bytes")
+        tampered = restarted.import_payload(envelope)
+        assert tampered.status == "rejected"
+        artifact_path.write_bytes(b"USIE to OCIF end-to-end evidence")
 
         changed = {**envelope, "warnings": ["post-export mutation"]}
         assert restarted.import_payload(changed).status == "rejected"
@@ -174,3 +181,58 @@ def test_real_usie_capture_imports_to_postgres_and_replays_after_restart() -> No
                 extraction["provenance"]["post_text"]["artifact_sha256"]
                 == artifacts[0]["sha256"]
             )
+
+
+def test_real_usie_evidence_completes_postgres_content_workflow_vertical_slice() -> None:
+    import pytest
+
+    dsn = os.getenv("OCIF_TEST_POSTGRES_DSN")
+    if not dsn:
+        pytest.skip("PostgreSQL integration DSN not configured")
+    with tempfile.TemporaryDirectory() as directory:
+        envelope = _export_real_sqlite_capture(Path(directory))
+        store = PostgresOCIFStore(dsn, artifact_root=Path(directory) / "evidence")
+        store.initialize()
+        imported = store.import_payload(envelope)
+        assert imported.status == "accepted"
+
+        workflow = ContentWorkflow(dsn)
+        workflow.initialize()
+        brief_id = workflow.create_research_brief(
+            "Research a source-backed social topic",
+            [envelope["capture_id"]],
+            "Brief cites the real USIE capture and its verified artifact manifest.",
+        )
+        draft_id = workflow.create_draft(
+            brief_id,
+            "Evidence first. State the trend, cite the source, and explain its relevance.",
+            {"evidence": 1.0, "clarity": 0.9, "novelty": 0.7, "brand_fit": 0.8},
+        )
+        approval_id = workflow.approve_draft(draft_id, "human-reviewer")
+        executions = []
+
+        def authorize(request):
+            return {
+                "allowed": True,
+                "invocation_id": "ois-" + request["idempotency_key"],
+                "policy_version": "ocif-content-test-v1",
+            }
+
+        def execute_noop(request):
+            executions.append(dict(request))
+            return {"mode": "sandbox_noop", "external_side_effects": False}
+
+        receipt = workflow.execute_approved(
+            approval_id,
+            idempotency_key=str(uuid.uuid4()),
+            authorize=authorize,
+            execute_noop=execute_noop,
+        )
+        assert receipt["status"] == "succeeded"
+        assert receipt["execution"]["external_side_effects"] is False
+        assert len(executions) == 1
+        workflow.record_outcome(
+            receipt["receipt_id"],
+            {"impressions": 100, "engagements": 8, "measurement_window_hours": 24},
+            source="deterministic-integration-fixture",
+        )
