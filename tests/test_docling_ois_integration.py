@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import hashlib
 
-from ocif.document_processing import build_envelope, to_ois_input
-
 from ois.integration.ocif_document_processing import OCIFDocumentProcessingCapability
 from ois.integration.spine import OISSpine, SpineRequest
 from ois.kernel.policy import DefaultPolicyEngine
 from ois.registries import CapabilityRegistry
+
+from ocif.document_processing import build_envelope, to_ois_input
 
 
 def make_envelope() -> dict:
