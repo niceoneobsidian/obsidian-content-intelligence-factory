@@ -6,6 +6,7 @@ uses psycopg lazily so the standard-library-only local consumer remains usable.
 from __future__ import annotations
 
 import hashlib
+from pathlib import Path, PurePosixPath
 from collections.abc import Callable, Mapping
 from datetime import datetime
 from typing import Any
@@ -44,7 +45,9 @@ class PostgresOCIFStore:
         dsn: str | None = None,
         *,
         connection_factory: Callable[[], Any] | None = None,
+        artifact_root: str | Path | None = None,
     ) -> None:
+        self._artifact_root = Path(artifact_root).expanduser().resolve() if artifact_root else None
         if connection_factory is None and not (dsn and dsn.strip()):
             raise ValueError(
                 "PostgreSQL DSN or connection_factory is required"
@@ -86,6 +89,24 @@ class PostgresOCIFStore:
             ),
         )
 
+    def _verify_artifact_files(self, envelope: Mapping[str, Any]) -> None:
+        artifacts = envelope.get("artifacts", [])
+        if not artifacts:
+            return
+        if self._artifact_root is None:
+            raise ContractError("artifact_root is required to verify artifact-bearing envelopes")
+        root = self._artifact_root
+        for artifact in artifacts:
+            relative = PurePosixPath(str(artifact["location"]))
+            candidate = (root / Path(*relative.parts)).resolve()
+            if not candidate.is_relative_to(root) or not candidate.is_file():
+                raise ContractError(f"artifact {artifact['artifact_id']}: missing or unsafe file")
+            if candidate.stat().st_size != int(artifact["byte_size"]):
+                raise ContractError(f"artifact {artifact['artifact_id']}: byte size mismatch")
+            digest = hashlib.sha256(candidate.read_bytes()).hexdigest()
+            if digest != artifact["sha256"]:
+                raise ContractError(f"artifact {artifact['artifact_id']}: SHA-256 mismatch")
+
     def import_payload(self, payload: Mapping[str, Any]) -> ImportResult:
         started = datetime.now().astimezone()
         try:
@@ -100,6 +121,7 @@ class PostgresOCIFStore:
             ).hexdigest()
         try:
             envelope = validate_envelope(payload)
+            self._verify_artifact_files(envelope)
         except ContractError as exc:
             with self._connect() as connection, connection.cursor() as cursor:
                 cursor.execute(
