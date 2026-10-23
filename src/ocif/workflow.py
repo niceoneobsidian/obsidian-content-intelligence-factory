@@ -216,7 +216,6 @@ class ContentWorkflow:
     def execute_approved(
         self, approval_id: str, *, idempotency_key: str,
         authorize: Callable[[Mapping[str, Any]], Mapping[str, Any]],
-        execute_noop: Callable[[Mapping[str, Any]], Mapping[str, Any]] | None = None,
     ) -> dict[str, Any]:
         """Verify approval, call OIS outside row locks, and persist a no-op receipt."""
         if not idempotency_key.strip():
@@ -294,16 +293,7 @@ class ContentWorkflow:
                     f"OIS authorization response is not bound to the requested {key}"
                 )
 
-        executor = execute_noop or (
-            lambda req: {"mode": req["mode"], "external_side_effects": False}
-        )
-        execution = executor(request)
-        if (
-            not isinstance(execution, Mapping)
-            or execution.get("mode") != "sandbox_noop"
-            or execution.get("external_side_effects") is not False
-        ):
-            raise WorkflowError("only a verified sandbox/no-op execution receipt is accepted")
+        execution = {"mode": "sandbox_noop", "external_side_effects": False}
 
         receipt_id = str(uuid4())
         with self._connect() as conn, conn.cursor() as cur:
