@@ -6,7 +6,6 @@ uses psycopg lazily so the standard-library-only local consumer remains usable.
 from __future__ import annotations
 
 import hashlib
-import json
 from collections.abc import Callable, Mapping
 from datetime import datetime
 from typing import Any
@@ -42,7 +41,9 @@ class PostgresOCIFStore:
 
     def __init__(self, dsn: str | None = None, *, connection_factory: Callable[[], Any] | None = None) -> None:
         if connection_factory is None and not (dsn and dsn.strip()):
-            raise ValueError("PostgreSQL DSN or connection_factory is required")
+            raise ValueError(
+                "PostgreSQL DSN or connection_factory is required"
+            )
         if connection_factory is not None:
             self._connect: Callable[[], Any] = connection_factory
         else:
@@ -51,6 +52,7 @@ class PostgresOCIFStore:
                     import psycopg
                 except ImportError as exc:  # pragma: no cover - deployment configuration
                     raise RuntimeError("install ocif[postgres] to use PostgresOCIFStore") from exc
+                assert dsn is not None
                 return psycopg.connect(dsn)
             self._connect = connect
 
@@ -61,26 +63,50 @@ class PostgresOCIFStore:
     def close(self) -> None:
         """No persistent connection is held by this adapter."""
 
-    def _event(self, cursor: Any, event_type: str, envelope: Mapping[str, Any] | None, detail: Mapping[str, Any]) -> None:
+    def _event(
+        self,
+        cursor: Any,
+        event_type: str,
+        envelope: Mapping[str, Any] | None,
+        detail: Mapping[str, Any],
+    ) -> None:
         cursor.execute(
             """INSERT INTO ocif_import_events(event_type, source_id, capture_id, detail_json)
                VALUES (%s, %s, %s, %s::jsonb)""",
-            (event_type, envelope.get("source_id") if envelope else None,
-             envelope.get("capture_id") if envelope else None, _canonical_json(detail)),
+            (
+                event_type,
+                envelope.get("source_id") if envelope else None,
+                envelope.get("capture_id") if envelope else None,
+                _canonical_json(detail),
+            ),
         )
 
     def import_payload(self, payload: Mapping[str, Any]) -> ImportResult:
         started = datetime.now().astimezone()
         try:
-            raw_hash = _digest(payload) if isinstance(payload, Mapping) else _digest({"invalid": type(payload).__name__})
+            raw_hash = (
+                _digest(payload)
+                if isinstance(payload, Mapping)
+                else _digest({"invalid": type(payload).__name__})
+            )
         except (TypeError, ValueError):
-            raw_hash = hashlib.sha256(f"invalid:{type(payload).__name__}".encode()).hexdigest()
+            raw_hash = hashlib.sha256(
+                f"invalid:{type(payload).__name__}".encode()
+            ).hexdigest()
         try:
             envelope = validate_envelope(payload)
         except ContractError as exc:
             with self._connect() as connection, connection.cursor() as cursor:
-                cursor.execute("INSERT INTO ocif_quarantine(payload_hash, reason) VALUES (%s, %s)", (raw_hash, str(exc)))
-                self._event(cursor, "import.rejected", None, {"reason": str(exc), "payload_hash": raw_hash})
+                cursor.execute(
+                    "INSERT INTO ocif_quarantine(payload_hash, reason) VALUES (%s, %s)",
+                    (raw_hash, str(exc)),
+                )
+                self._event(
+                    cursor,
+                    "import.rejected",
+                    None,
+                    {"reason": str(exc), "payload_hash": raw_hash},
+                )
             return ImportResult("rejected", None, None, str(exc))
 
         key = (envelope["source_id"], envelope["capture_id"], envelope["contract_version"])
@@ -106,7 +132,12 @@ class PostgresOCIFStore:
             inserted = cursor.fetchone()
             if inserted is not None:
                 observation_id = int(inserted[0])
-                self._event(cursor, "import.accepted", envelope, {"observation_id": observation_id, "payload_hash": raw_hash})
+                self._event(
+                    cursor,
+                    "import.accepted",
+                    envelope,
+                    {"observation_id": observation_id, "payload_hash": raw_hash},
+                )
                 return ImportResult("accepted", key[0], key[1], observation_id=observation_id)
 
             cursor.execute(
@@ -115,12 +146,27 @@ class PostgresOCIFStore:
             )
             existing = cursor.fetchone()
             if existing is None:
-                raise RuntimeError("conflicting OCIF observation disappeared during idempotency check")
+                raise RuntimeError(
+                    "conflicting OCIF observation disappeared during idempotency check"
+                )
             observation_id, existing_hash = int(existing[0]), str(existing[1])
             if existing_hash == raw_hash:
-                self._event(cursor, "import.duplicate", envelope, {"observation_id": observation_id, "payload_hash": raw_hash})
+                self._event(
+                    cursor,
+                    "import.duplicate",
+                    envelope,
+                    {"observation_id": observation_id, "payload_hash": raw_hash},
+                )
                 return ImportResult("duplicate", key[0], key[1], observation_id=observation_id)
             reason = "idempotency key reused with changed payload; possible producer mutation"
-            cursor.execute("INSERT INTO ocif_quarantine(payload_hash, reason) VALUES (%s, %s)", (raw_hash, reason))
-            self._event(cursor, "import.conflict", envelope, {"reason": reason, "payload_hash": raw_hash})
+            cursor.execute(
+                "INSERT INTO ocif_quarantine(payload_hash, reason) VALUES (%s, %s)",
+                (raw_hash, reason),
+            )
+            self._event(
+                cursor,
+                "import.conflict",
+                envelope,
+                {"reason": reason, "payload_hash": raw_hash},
+            )
             return ImportResult("rejected", key[0], key[1], reason)
