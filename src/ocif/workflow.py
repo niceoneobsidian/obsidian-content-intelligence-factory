@@ -78,11 +78,11 @@ class ContentWorkflow:
     CREATE INDEX IF NOT EXISTS idx_ocif_outcomes_receipt
       ON ocif_outcome_events(receipt_id, recorded_at);
     CREATE OR REPLACE FUNCTION ocif_reject_workflow_history_mutation()
-    RETURNS trigger LANGUAGE plpgsql AS $
+    RETURNS trigger LANGUAGE plpgsql AS $ocif$
     BEGIN
       RAISE EXCEPTION 'OCIF execution receipts and outcome events are append-only';
     END;
-    $;
+    $ocif$;
     DROP TRIGGER IF EXISTS trg_ocif_receipt_immutable ON ocif_execution_receipts;
     CREATE TRIGGER trg_ocif_receipt_immutable
       BEFORE UPDATE OR DELETE ON ocif_execution_receipts
