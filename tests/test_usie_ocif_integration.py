@@ -148,6 +148,10 @@ def test_real_usie_capture_imports_to_postgres_and_replays_after_restart() -> No
         assert first.status == "accepted"
         assert first.observation_id is not None
 
+        missing_root_store = PostgresOCIFStore(dsn)
+        missing_root_payload = {**envelope, "capture_id": str(uuid.uuid4())}
+        assert missing_root_store.import_payload(missing_root_payload).status == "rejected"
+
         # A new store instance models process restart against the same durable database.
         restarted = PostgresOCIFStore(dsn, artifact_root=Path(directory) / "evidence")
         restarted.initialize()
