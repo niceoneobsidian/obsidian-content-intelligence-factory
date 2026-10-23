@@ -213,28 +213,38 @@ def test_real_usie_evidence_completes_postgres_content_workflow_vertical_slice()
             {"evidence": 1.0, "clarity": 0.9, "novelty": 0.7, "brand_fit": 0.8},
         )
         approval_id = workflow.approve_draft(draft_id, "human-reviewer")
-        executions = []
+        from ois.integration.durable_runtime import build_durable_ois_runtime
+        from ois.integration.ocif_content_execution import (
+            OCIFContentExecutionCapability,
+            authorize_ocif_content_request,
+        )
+        from ois.registries import CapabilityRegistry
+
+        registry = CapabilityRegistry()
+        registry.register(OCIFContentExecutionCapability())
+        ois_runtime = build_durable_ois_runtime(
+            registry,
+            postgres_dsn=dsn,
+            tenant_id="tenant-test",
+            allowed_permissions=("ocif.content.execute",),
+        )
 
         def authorize(request):
-            return {
-                "allowed": True,
-                "invocation_id": "ois-" + request["idempotency_key"],
-                "policy_version": "ocif-content-test-v1",
-            }
+            return authorize_ocif_content_request(
+                ois_runtime.spine, request, tenant_id="tenant-test"
+            )
 
-        def execute_noop(request):
-            executions.append(dict(request))
-            return {"mode": "sandbox_noop", "external_side_effects": False}
-
-        receipt = workflow.execute_approved(
-            approval_id,
-            idempotency_key=str(uuid.uuid4()),
-            authorize=authorize,
-            execute_noop=execute_noop,
-        )
+        try:
+            receipt = workflow.execute_approved(
+                approval_id,
+                idempotency_key=str(uuid.uuid4()),
+                authorize=authorize,
+            )
+        finally:
+            ois_runtime.close()
         assert receipt["status"] == "succeeded"
         assert receipt["execution"]["external_side_effects"] is False
-        assert len(executions) == 1
+        assert receipt["execution"]["mode"] == "sandbox_noop"
         workflow.record_outcome(
             receipt["receipt_id"],
             {"impressions": 100, "engagements": 8, "measurement_window_hours": 24},
