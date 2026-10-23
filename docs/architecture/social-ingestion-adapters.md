@@ -23,7 +23,7 @@
 | Firecrawl MCP | Web search and structured page extraction | Use only for permitted public pages; record query, source URL, capture time, tool/version, artifact hash and extraction provenance. Do not use it to evade authentication or access controls. |
 | FeedDeck | Cross-feed monitoring UI | Use for human discovery and topic triage; route selected URLs into USIE rather than importing its local UI state as evidence. |
 | n8n | Scheduling and glue | Trigger bounded USIE jobs, move only versioned envelopes, and record workflow execution IDs. Credentials stay in its credential store; no tokens in payloads. |
-| Mixpost | Potential publishing/scheduling adapter | Defer integration until the OIS publish capability, approval digest binding, network-specific consent, rollback and metrics contracts pass. Do not enable live publishing in the current workflow. |
+| Mixpost Lite | Potential publishing/scheduling adapter | The upstream Lite repository describes personal-use scope. Review its license and plan/network support before adoption. Defer integration until the OIS publish capability, approval digest binding, network-specific consent, rollback and metrics contracts pass. Do not enable live publishing in the current workflow. |
 
 ## Canonical event envelope
 
@@ -70,4 +70,4 @@ Measure retrieval with a fixed golden query set using recall@k, MRR and precisio
 - n8n documentation: https://docs.n8n.io/
 - Official Firecrawl MCP server: https://github.com/firecrawl/firecrawl-mcp-server
 - FeedDeck source: https://github.com/feeddeck/feeddeck
-- Mixpost source: https://github.com/inovector/mixpost
+- Mixpost source: https://github.com/EnSofDev/mixpost
