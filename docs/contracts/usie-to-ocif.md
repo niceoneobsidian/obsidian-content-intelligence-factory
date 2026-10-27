@@ -1,14 +1,14 @@
 # USIE-to-OCIF Evidence Contract
 
 **Contract ID:** `ocif.usie-import`  
-**Version:** `0.1.0-draft`  
-**Status:** Draft for joint review; not an implemented API or export format
+**Version:** `0.1.0`  
+**Status:** Approved for internal cross-repository integration; stable API and production acceptance remain gated
 
 ## 1. Purpose
 
 Define the minimum information OCIF needs to import USIE collection/extraction outcomes without taking ownership of USIE's canonical data or losing provenance.
 
-This document is a proposed consumer contract. It does not assert that USIE currently exposes a JSON export endpoint, public SDK, or stable API. The implementation mechanism must be selected after inspecting the current USIE CLI, repository interfaces, schema and tests.
+This document is the accepted internal wire contract for the OCIF consumer and the USIE read-only export adapter. The implementation uses a producer-side Python adapter over USIE's canonical repository records; it is not a public HTTP endpoint or a stable external API. This approval authorizes implementation and cross-repository testing only; production acceptance remains subject to the release gates below.
 
 ## 2. Contract rules
 
@@ -16,27 +16,28 @@ This document is a proposed consumer contract. It does not assert that USIE curr
 2. Never infer successful extraction from a page load, screenshot, DOM snapshot or HTTP 200 alone.
 3. Every imported observation must have stable source identity, capture identity, explicit outcome, timestamps and provenance.
 4. Import is idempotent for the same source capture and contract version; a later recapture is a new observation, not an overwrite.
-5. Unknown fields may be preserved in a raw metadata envelope if safe, but must not silently become trusted facts.
+5. This strict candidate rejects unknown fields; extensibility requires a reviewed contract-version change. Unknown data must not silently become trusted facts.
 6. Invalid or incomplete records are quarantined/rejected with a reason. They must not silently disappear or be upgraded to success.
 7. Raw evidence stays in USIE unless a reviewed data-transfer policy explicitly allows copying it. OCIF may store references, hashes, approved excerpts and normalized metadata.
 8. Contract/schema changes are versioned and tested by both producer and consumer.
 
 ## 3. Required logical envelope
 
-The exact field names are proposed and require mapping to the actual USIE schema.
+The field names below are the agreed wire envelope. The USIE adapter maps them from canonical `captures`, `sources`, `artifacts`, and `extraction_results` records; producer and consumer tests must retain parity.
 
 | Field | Required | Meaning |
 |---|---:|---|
 | `contract_version` | Yes | Version of this consumer contract |
 | `source_id` | Yes | USIE's stable source identifier |
 | `submitted_url` | Yes | URL as submitted for the collection job, preserved verbatim |
-| `normalized_url` | Yes, if available | URL used for canonical source identity |
+| `normalized_url` | Yes | URL used for canonical source identity |
 | `capture_id` | Yes | Unique capture attempt identifier |
 | `capture_status` | Yes | Exact canonical USIE outcome; no lossy remapping |
 | `status_reason` | Yes, when present | Evidence-based reason code or explanation |
-| `captured_at` | Yes, if capture started | Timestamp with timezone |
-| `completed_at` | Yes, if finalized | Timestamp with timezone |
-| `artifacts[]` | Yes, possibly empty | Artifact ID/type, relative or resolvable location, SHA-256, byte size and media type when known |
+| `error_code` | Yes, when present | Canonical producer error code; never inferred by the consumer |
+| `captured_at` | Yes | Timestamp with timezone |
+| `completed_at` | Yes | Timestamp with timezone; accepted imports must be finalized |
+| `artifacts[]` | Yes, possibly empty | Artifact ID/type, safe relative location, SHA-256, non-negative byte size and media type |
 | `extraction` | Conditional | Extractor ID/version, schema version, validation outcome, fields and evidence references |
 | `platform` | If known | Router/platform classification; not a guarantee of adapter support |
 | `producer_revision` | Yes | USIE commit/version that produced the record |
@@ -46,14 +47,14 @@ Do not include cookies, authorization headers, raw secrets, or unredacted sessio
 
 ## 4. Outcome semantics
 
-Preserve the exact canonical USIE status. At the current documented stage, statuses include `success`, `partial`, `blocked`, `unavailable`, `failed`, and cancellation/interruption outcomes as defined by the live schema.
+Preserve the exact canonical USIE status. This candidate accepts exactly `success`, `partial`, `blocked`, `unavailable`, `failed`, and `cancelled`. A new live-schema status must be mapped in a reviewed contract update; until then it is rejected/quarantined.
 
 - `success`: accepted only when USIE's validated extraction rules say success.
 - `partial`: evidence exists but required extraction or validation is incomplete.
 - `blocked`: access denial or an observed access wall, according to USIE rules.
 - `unavailable`: an observed not-found/unavailable outcome; do not infer deletion from a generic network error.
 - `failed`: collection or processing failure with an error code/reason.
-- cancelled/interrupted: preserve the exact canonical value and reason if the schema supports it; do not collapse it to `failed` without an explicit mapping.
+- `cancelled`: preserve the canonical value and reason; do not collapse it to `failed`.
 
 The consumer must tolerate new statuses by safely quarantining unknown values and surfacing a compatibility error rather than guessing.
 
@@ -71,7 +72,7 @@ A platform label is routing metadata, not proof that content extraction is imple
 
 ## 6. Idempotency and updates
 
-- Suggested import key: `(source_id, capture_id, contract_version)`, subject to review.
+- Import key: `(source_id, capture_id, contract_version)`.
 - Reimporting the same key must not create duplicate knowledge observations.
 - A new `capture_id` must create a new observation and preserve prior lineage.
 - Corrections should be represented as versioned derived records or supersession links, not destructive edits to source evidence.
@@ -103,7 +104,24 @@ Both repositories must test fixtures for:
 - missing artifact, hash mismatch, malformed timestamp, unknown status and unknown contract version;
 - secrets/redaction and hostile prompt-like content in source text.
 
-## 9. Implementation sequence
+## 9. Internal contract decision
+
+**Decision:** Approved for internal implementation and integration testing as `ocif.usie-import` version `0.1.0`.
+
+**Scope:** The read-only USIE export adapter and OCIF consumer may implement this versioned envelope and test against shared fixtures. This does not claim that the adapter is merged, deployed, exposed as a public API, or production-certified.
+
+**Required before stable/production designation:**
+
+1. Producer and consumer fixture parity for every canonical terminal status, including malformed and unknown status cases.
+2. Real USIE SQLite capture + artifact directory export/import integration test.
+3. Artifact tamper, missing-file, unsafe-path and extraction-provenance mismatch rejection tests.
+4. PostgreSQL consumer replay after store/process recreation, idempotency conflict handling and quarantine verification.
+5. Fresh green required CI on final PR heads and reviewed changes in both repositories.
+6. OIS authorization denial and recovery test using the actual PostgreSQL OCIF consumer.
+
+**Ownership:** USIE remains authoritative for captures, extraction records and artifact bytes. OCIF remains authoritative for imported observations, quarantine, retrieval indexes and content workflow state. Neither system may infer support or success from the other system's platform label.
+
+## 10. Implementation sequence
 
 1. Agent 1 documents actual USIE schema, CLI and existing export options from source code and tests.
 2. Jointly map the proposed envelope to canonical fields and record differences.

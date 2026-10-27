@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://niceoneobsidian.github.io/ocif/contracts/document-processing-envelope-0.1.0.schema.json",
+  "title": "OCIF Document Processing Envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "document_id",
+    "source_id",
+    "artifact_id",
+    "artifact_sha256",
+    "artifact_size_bytes",
+    "media_type",
+    "processor_id",
+    "processor_version",
+    "options_digest",
+    "extraction_run_id",
+    "idempotency_key",
+    "extraction_status",
+    "started_at",
+    "completed_at",
+    "output_refs",
+    "page_provenance",
+    "warnings"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": "0.1.0"
+    },
+    "document_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "capture_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "artifact_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "artifact_sha256": {
+      "type": "string",
+      "pattern": "^[a-fA-F0-9]{64}$"
+    },
+    "artifact_size_bytes": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "media_type": {
+      "type": "string",
+      "minLength": 1
+    },
+    "processor_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "processor_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "options_digest": {
+      "type": "string",
+      "pattern": "^[a-fA-F0-9]{64}$"
+    },
+    "extraction_run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "extraction_status": {
+      "enum": [
+        "success",
+        "partial",
+        "unsupported",
+        "failed",
+        "quarantined"
+      ]
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "output_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "page_provenance": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "page_number"
+        ],
+        "additionalProperties": true,
+        "properties": {
+          "page_number": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "region": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "locator": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "error_code": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "producer_revision": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "idempotency_key": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}
